@@ -1,0 +1,243 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.compose'
+    // org.jetbrains.compose (Compose Multiplatform) removed: this is an Android-only
+    // project using androidx Compose.
+}
+
+android {
+    namespace 'com.example.lightapp'
+    compileSdk 35
+
+    defaultConfig {
+        // The store identity for "No Ads Studio" — decision D27. Google Play rejects the
+        // reserved `com.example.*` id this used to hold, so a real reverse-domain id was the
+        // last thing blocking a release.
+        //
+        // PERMANENT ONCE PUBLISHED. This is fully reversible until the first upload and never
+        // again — Play keys an app to this string for life. If you own a specific domain,
+        // change it to match before publishing; `com.noadsstudio` assumes nothing beyond the
+        // studio name. This is the store identity only. The code package (the `namespace`
+        // below, still `com.example.lightapp`) is a separate, compile-time concern that Play
+        // never sees — aligning it is an optional refactor, not a release blocker.
+        applicationId "com.noadsstudio"
+        // minSdk 26 — decision D19. Must match :design-system or the manifest merger fails.
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // ── One source tree, two shippable apps ──────────────────────────────────────
+    //
+    // The studio flavour is the multi-game library. Each game additionally gets a
+    // standalone flavour, because store discoverability runs on specific terms: a
+    // "sudoku" listing can rank for sudoku and a "puzzle studio" listing cannot.
+    //
+    // The alternative was one project per game. That means a token change becomes N
+    // releases and :design-system has to be published as an artifact or copied into each
+    // repo — and copying it is exactly what design-canon/ exists to prevent. Flavours give
+    // separate applicationIds off one tree, so a design fix stays one commit.
+    //
+    // There is also a licensing reason, and it is the stronger one. The vendored QQWing
+    // generator is GPL-3.0. That obligation attaches to whatever artifact ships it, so with
+    // a single combined app a future Nonogram — which contains no GPL code — would inherit
+    // it anyway. Scoping the engine to a source set only Sudoku-bearing flavours compile
+    // keeps the obligation on the artifacts that actually earn it. Enforced by
+    // `R4-gpl-isolation`, which fails the build if the engine reappears in src/main.
+    flavorDimensions += 'distribution'
+
+    productFlavors {
+        studio {
+            dimension 'distribution'
+            // The launcher label for the multi-game build — decision D27.
+            resValue 'string', 'app_name', 'No Ads Studio'
+        }
+        sudoku {
+            dimension 'distribution'
+            applicationIdSuffix '.sudoku'
+            versionNameSuffix '-sudoku'
+            resValue 'string', 'app_name', 'sudoku'
+        }
+        // The third listing: nonogram(10) alone — decision D25. Store search runs on
+        // specific terms, a standalone listing ranks for its game, and gameNonogram
+        // holds no vendored GPL code, so this artifact carries no licence obligation
+        // it never earned. (Comment kept short: M5-standalone-identity reads only the
+        // first 400 characters of a flavour block.)
+        nonogram {
+            dimension 'distribution'
+            applicationIdSuffix '.nonogram'
+            versionNameSuffix '-nonogram'
+            resValue 'string', 'app_name', 'nonogram'
+        }
+        // The fourth listing: minesweeper(10) alone — decision D25, same reasons as
+        // nonogram. gameMinesweeper is also GPL-clean, so the obligation stays on the
+        // artifacts that ship QQWing.
+        minesweeper {
+            dimension 'distribution'
+            applicationIdSuffix '.minesweeper'
+            versionNameSuffix '-minesweeper'
+            resValue 'string', 'app_name', 'minesweeper'
+        }
+        // The fifth listing: connect(7) alone — decision D25, same reasons again.
+        // gameConnect holds no vendored code at all: the generator is our own.
+        connect {
+            dimension 'distribution'
+            applicationIdSuffix '.connect'
+            versionNameSuffix '-connect'
+            resValue 'string', 'app_name', 'connect'
+        }
+        // The sixth listing: wordsearch(12) alone — decision D25, same reasons.
+        // gameWordsearch holds no vendored code: the generator is our own.
+        wordsearch {
+            dimension 'distribution'
+            applicationIdSuffix '.wordsearch'
+            versionNameSuffix '-wordsearch'
+            resValue 'string', 'app_name', 'wordsearch'
+        }
+        // The seventh listing: blockpuzzle(8) alone — decision D33 admitted it; the
+        // same standalone-listing reasons as every game before it. gameBlockpuzzle
+        // holds no vendored code: the generator is our own.
+        block {
+            dimension 'distribution'
+            applicationIdSuffix '.blockpuzzle'
+            versionNameSuffix '-blockpuzzle'
+            resValue 'string', 'app_name', 'blockpuzzle'
+        }
+        // The eighth listing: akari(10) alone — the roadmap's Tier 2 admission; the
+        // same standalone-listing reasons as every game before it. gameAkari holds
+        // no vendored code: the generator and its uniqueness proof are our own.
+        akari {
+            dimension 'distribution'
+            applicationIdSuffix '.akari'
+            versionNameSuffix '-akari'
+            resValue 'string', 'app_name', 'akari'
+        }
+        // The ninth listing: binairo(10) alone — admitted from the roadmap backlog
+        // (candidate #8, monochrome by definition); the same standalone-listing
+        // reasons as every game before it. gameBinairo holds no vendored code: the
+        // generator and its deduction proof are our own.
+        binairo {
+            dimension 'distribution'
+            applicationIdSuffix '.binairo'
+            versionNameSuffix '-binairo'
+            resValue 'string', 'app_name', 'binairo'
+        }
+    }
+
+    // Game code is shared *between* flavours, which flavour source sets cannot do on their
+    // own — they are mutually exclusive. So each game lives in its own `src/game<Name>`
+    // directory and every flavour that ships it adds that directory here. One line per
+    // (game, flavour) pair, and the absence of a line is what keeps a flavour clean.
+    // Unit tests need no entry here: the test compilation runs per variant and already sees
+    // that variant's main classes, so adding the game directory to the `test` source set
+    // would compile the same files a second time and collide.
+    sourceSets {
+        studio { java.srcDirs += ['src/gameSudoku/java', 'src/gameNonogram/java', 'src/gameMinesweeper/java', 'src/gameConnect/java', 'src/gameWordsearch/java', 'src/gameBlockpuzzle/java', 'src/gameAkari/java', 'src/gameBinairo/java'] }
+        sudoku { java.srcDirs += ['src/gameSudoku/java'] }
+        nonogram { java.srcDirs += ['src/gameNonogram/java'] }
+        minesweeper { java.srcDirs += ['src/gameMinesweeper/java'] }
+        connect { java.srcDirs += ['src/gameConnect/java'] }
+        wordsearch { java.srcDirs += ['src/gameWordsearch/java'] }
+        block { java.srcDirs += ['src/gameBlockpuzzle/java'] }
+        akari { java.srcDirs += ['src/gameAkari/java'] }
+        binairo { java.srcDirs += ['src/gameBinairo/java'] }
+        // Game tests follow the same split: each standalone flavour auto-attaches its
+        // own src/test<Flavour>, which is also where that game's tests live. The
+        // studio flavour ships every game, so its variants attach all of them — the
+        // flagship build keeps full game coverage without duplicating a single test
+        // file (its own testStudio directory deliberately does not exist).
+        testStudio { java.srcDirs += ['src/testSudoku/java', 'src/testNonogram/java', 'src/testMinesweeper/java', 'src/testConnect/java', 'src/testWordsearch/java', 'src/testBlock/java', 'src/testAkari/java', 'src/testBinairo/java'] }
+    }
+
+    testOptions {
+        unitTests.all {
+            testLogging { events 'passed', 'failed' }
+        }
+    }
+
+    lint {
+        // See the note in design-system/build.gradle — AGP 8.5.2 lint fails on JDK 25.
+        ignoreTestSources = true
+        abortOnError = false
+    }
+
+    // ── Local-only release signing, for on-device checks before a real key exists ──
+    //
+    // `assembleRelease`/`bundleRelease` fail outright with no signing config at all, and
+    // there is no production keystore yet — generating one is a decision for whoever owns
+    // the Play Console listing, not something to do silently on their behalf.
+    //
+    // `keystore/local-verify.jks` is a throwaway self-signed key, gated behind the file's
+    // presence so a fresh checkout without it still builds `debug` normally and simply
+    // skips release signing rather than failing. It must never be the key an app is
+    // published with: Play permanently binds a listing to its signing key on first upload,
+    // and a compromised or lost throwaway key would mean losing the ability to update that
+    // listing forever. `.gitignore` already excludes `*.jks` for this reason.
+    def localVerifyKeystore = file('keystore/local-verify.jks')
+    if (localVerifyKeystore.exists()) {
+        signingConfigs {
+            localVerify {
+                storeFile localVerifyKeystore
+                storePassword 'local-verify-only'
+                keyAlias 'local-verify'
+                keyPassword 'local-verify-only'
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (localVerifyKeystore.exists()) {
+                signingConfig signingConfigs.localVerify
+            }
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+    // composeOptions.kotlinCompilerExtensionVersion removed: from Kotlin 2.0 the
+    // Compose compiler ships as the org.jetbrains.kotlin.plugin.compose plugin above.
+    buildFeatures {
+        compose true
+        // Needed so the composition guards can be strict in debug and no-op in release.
+        buildConfig true
+    }
+}
+
+dependencies {
+    implementation project(':design-system')
+
+    // Persistence — decision D7. DataStore, not Room: Room needs KSP annotation
+    // processing, which taxes every build on the reference machine, and one game's
+    // state is three strings and a long. On the permitted list in
+    // design-canon/dependency-denylist.md.
+    implementation 'androidx.datastore:datastore-preferences:1.1.1'
+
+    // ViewModel + lifecycle-aware state collection. Needed for Requirement 16
+    // criterion 3: generation off the main thread, surviving configuration change.
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4'
+    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.8.4'
+
+    implementation platform('androidx.compose:compose-bom:2024.06.00')
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.activity:activity-compose:1.9.0'
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+    debugImplementation 'androidx.compose.ui:ui-test-manifest'
+
+    testImplementation 'junit:junit:4.13.2'
+}
+
+// The conformance checker is a build gate, not an optional step — decision D23.
+tasks.named('check') { dependsOn rootProject.tasks.named('conformanceCheck') }

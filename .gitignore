@@ -1,0 +1,35 @@
+# Env — never commit keys
+.env
+.env.local
+.env.*
+
+# Build output
+build/
+*/build/
+**/build/generated/
+
+# Gradle
+.gradle/
+local.properties
+.kotlin/
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Signing — never commit
+*.jks
+*.keystore
+keystore.properties
+
+# Release artifacts
+*.apk
+*.aab
+*.aar
+
+# Paparazzi failure diffs (goldens under snapshots/ ARE committed)
+**/out/failures/
+
+# Client-local state
+.freebuff/

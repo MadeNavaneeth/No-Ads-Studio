@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The launch window background, and nothing else.
+
+  This is the one colour the platform needs before any Compose code runs, so it cannot
+  come from the generated token objects. It is therefore the single place where a hex
+  value is duplicated out of design-canon/tokens.json by hand — kept honest by naming the
+  token it mirrors. If `bg` changes, change this too.
+
+  Qualified by night, because the OS theme is all that is known at launch. The in-app
+  theme override is read from disk one frame later.
+-->
+<resources>
+    <!-- mirrors tokens.json `bg`.light -->
+    <color name="launch_background">#F5F5F5</color>
+</resources>

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // task tool denied: its ~14KB description (tool docs + appended subagent prompt)
+  // exceeds this gateway's ~8KB function.description limit, which fails the whole
+  // request. Deny also excludes it from the payload. See .opencode/plugins/gateway-compat.js.
+  "permission": {
+    "task": "deny"
+  },
+  "provider": {
+    "experientiallabs": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Experiential Labs",
+      "options": {
+        "baseURL": "https://api.experientiallabs.ai/v1",
+        "apiKey": "{env:EXPLABS_API_KEY}"
+      },
+      "models": {
+        "gpt-6-astra": {
+          "name": "GPT 6 Astra",
+          "tool_call": true,
+          "reasoning": false,
+          "attachment": true
+        },
+        "gpt-5.6-luna": {
+          "name": "GPT 5.6 Luna",
+          "tool_call": true,
+          "reasoning": false,
+          "attachment": true
+        }
+      }
+    }
+  }
+}

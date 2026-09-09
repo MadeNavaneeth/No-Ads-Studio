@@ -1,0 +1,108 @@
+package com.example.lightapp.studio.persistence
+
+import android.content.Context
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+
+/**
+ * wordsearch(12) persistence — wraps the shell's game-agnostic [SessionStore] with the
+ * wordsearch-specific encode/decode.
+ *
+ * The shell never learns what a wordsearch session looks like: it stores opaque string
+ * fields per game and hands them back. This class owns the field names and the
+ * letters/found/placements encoding, and exposes wordsearch-typed accessors to the
+ * game's ViewModel and MainActivity.
+ */
+class WordsearchSessionStore(context: Context) {
+
+    private val store = SessionStore(context)
+
+    // ── settings & stats — delegate to the shell ───────────────────────────────
+    val themeMode: Flow<String?> = store.themeMode
+    val hapticsEnabled: Flow<Boolean> = store.hapticsEnabled
+    val showRemaining: Flow<Boolean> = store.showRemaining
+    val showTimer: Flow<Boolean> = store.showTimer
+    val showPeers: Flow<Boolean> = store.showPeers
+    val mistakeLimit: Flow<Int> = store.mistakeLimit
+    val accentChoice: Flow<String> = store.accentChoice
+    val autoCleanNotes: Flow<Boolean> = store.autoCleanNotes
+
+    suspend fun setThemeMode(mode: String) = store.setThemeMode(mode)
+    suspend fun setHapticsEnabled(enabled: Boolean) = store.setHapticsEnabled(enabled)
+    suspend fun setShowRemaining(show: Boolean) = store.setShowRemaining(show)
+    suspend fun setShowTimer(show: Boolean) = store.setShowTimer(show)
+    suspend fun setShowPeers(show: Boolean) = store.setShowPeers(show)
+    suspend fun setMistakeLimit(limit: Int) = store.setMistakeLimit(limit)
+    suspend fun setAccentChoice(choice: String) = store.setAccentChoice(choice)
+    suspend fun setAutoCleanNotes(enabled: Boolean) = store.setAutoCleanNotes(enabled)
+
+    fun stats(gameId: String): Flow<GameStats> = store.stats(gameId)
+    val allStats: Flow<Map<String, GameStats>> = store.allStats
+    suspend fun recordResult(
+        gameId: String,
+        difficulty: String,
+        won: Boolean,
+        durationMs: Long,
+    ) = store.recordResult(gameId, difficulty, won, durationMs)
+    suspend fun clearAllStats() = store.clearAllStats()
+
+    // ── game sessions ──────────────────────────────────────────────────────────
+    private val gameId = "wordsearch"
+
+    private fun decode(fields: Map<String, String>): WordsearchSession? {
+        val letters = WordsearchCodec.decodeLetters(fields["letters"]) ?: return null
+        val found = WordsearchCodec.decodeFound(fields["found"]) ?: return null
+        val placements = WordsearchCodec.decodePlacements(fields["placements"]) ?: return null
+        return WordsearchSession(
+            letters = letters,
+            found = found,
+            placements = placements,
+            elapsedMs = fields["elapsedMs"]?.toLongOrNull() ?: 0L,
+            difficulty = fields["difficulty"] ?: "Moderate",
+            mistakes = fields["mistakes"]?.toIntOrNull() ?: 0,
+            progress = fields["progress"]?.toFloatOrNull()?.coerceIn(0f, 1f) ?: 0f,
+        )
+    }
+
+    private fun encode(session: WordsearchSession): Map<String, String> = mapOf(
+        "letters" to WordsearchCodec.encodeLetters(session.letters),
+        "found" to WordsearchCodec.encodeFound(session.found),
+        "placements" to WordsearchCodec.encodePlacements(session.placements),
+        "elapsedMs" to session.elapsedMs.toString(),
+        "difficulty" to session.difficulty,
+        "mistakes" to session.mistakes.toString(),
+        "progress" to session.progress.toString(),
+    )
+
+    /** The wordsearch session, or null when none is stored. */
+    fun session(): Flow<WordsearchSession?> = store.sessionFields(gameId).map { fields ->
+        fields?.let { decode(it) }
+    }
+
+    suspend fun saveSession(session: WordsearchSession) {
+        store.storeSession(gameId, encode(session))
+    }
+
+    suspend fun clearSession() = store.clearSession(gameId)
+
+    /** All resume-card snapshots — keyed by game id. For wordsearch, just this one. */
+    val allSummaries: Flow<Map<String, GameSessionSnapshot>> = store.allSummaries
+
+    // ── daily puzzle ───────────────────────────────────────────────────────────
+    /**
+     * Today's daily puzzle, or null when none is stored for [day].
+     * The shell returns the stored fields only when the stored day equals [day],
+     * so a stale daily decodes to null — earlier day is leftovers, not progress.
+     */
+    fun daily(day: Long): Flow<WordsearchSession?> = store.dailyFields(gameId, day).map { fields ->
+        fields?.let { decode(it) }
+    }
+
+    suspend fun saveDaily(day: Long, session: WordsearchSession) {
+        store.storeDaily(gameId, day, encode(session))
+    }
+
+    suspend fun clearDaily() = store.clearDaily(gameId)
+
+    val activeDailies: Flow<Set<String>> = store.activeDailies
+}

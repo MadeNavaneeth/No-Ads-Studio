@@ -1,0 +1,60 @@
+// D35: standalone sudoku(9) app — app module.
+//
+// Depends on the shared shell (chrome) and design-system (design language) via
+// composite builds. This module provides only the sudoku game code, its session
+// persistence, and the app entry point.
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.compose'
+}
+
+android {
+    namespace 'com.example.lightapp'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.noadsstudio.sudoku"
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+    buildFeatures {
+        compose true
+        buildConfig true
+    }
+    lint {
+        ignoreTestSources = true
+        abortOnError = false
+    }
+}
+
+dependencies {
+    // The shared shell — chrome, navigation, settings, stats. Composite-substituted.
+    implementation 'com.example.lightapp:shell'
+
+    // Compose — the game screens use foundation layout directly.
+    implementation platform('androidx.compose:compose-bom:2024.06.00')
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.foundation:foundation'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.activity:activity-compose:1.9.0'
+
+    // Persistence — decision D7. DataStore, not Room.
+    implementation 'androidx.datastore:datastore-preferences:1.1.1'
+
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4'
+    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.8.4'
+
+    testImplementation 'junit:junit:4.13.2'
+}

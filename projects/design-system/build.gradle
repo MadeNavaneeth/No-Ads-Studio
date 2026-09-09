@@ -1,0 +1,298 @@
+import groovy.json.JsonSlurper
+
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.compose'
+}
+
+// D35: this build is included by every game project as a composite build
+// (`includeBuild('../../design-system')`). The group makes the module resolvable as
+// the coordinate `com.example.lightapp:design-system`, which is what the consumers
+// declare; Gradle substitutes the project for that coordinate. Version is unused by
+// substitution, so none is pinned here.
+group = 'com.example.lightapp'
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TOKEN GENERATION  —  Requirement 2, decision D6
+//
+// design-canon/tokens.json is the ONLY place a design value is authored.
+// This task generates Kotlin from it into build/generated/.
+// The output is never committed and never hand-edited.
+// ═══════════════════════════════════════════════════════════════════════════
+
+def tokenSource = rootProject.file('../../design-canon/tokens.json')
+def generatedDir = layout.buildDirectory.dir('generated/tokens/kotlin')
+
+// Fixed unit per category — Requirement 2 criterion 2
+def UNITS = [
+        'color'         : ~/^#[0-9A-Fa-f]{6}( \d{1,3}%)?$/,
+        'spacing step'  : ~/^\d+(\.\d+)?dp$/,
+        'corner radius' : ~/^\d+(\.\d+)?dp$/,
+        'stroke'        : ~/^\d+(\.\d+)?dp$/,
+        'opacity'       : ~/^0\.\d+$/,
+        'motion duration': ~/^\d+ms$/,
+        'easing'        : ~/^cubic-bezier\(.*\)$/,
+]
+
+tasks.register('generateTokens') {
+    description = 'Generates Kotlin design tokens from design-canon/tokens.json'
+    group = 'nothing'
+
+    inputs.file(tokenSource)
+    outputs.dir(generatedDir)
+
+    doLast {
+        if (!tokenSource.exists()) {
+            throw new GradleException("Token source not found: ${tokenSource.absolutePath}")
+        }
+
+        def raw
+        try {
+            raw = new JsonSlurper().parse(tokenSource)
+        } catch (Exception e) {
+            // R2 criterion 9 — unparseable source fails the build, leaves no stale output
+            throw new GradleException("tokens.json is not parseable: ${e.message}")
+        }
+
+        def tokens = raw.findAll { k, v -> !k.startsWith('$') }
+        def errors = []
+
+        tokens.each { name, t ->
+            if (!t.category) errors << "$name: missing 'category'"
+            if (!t.job) errors << "$name: missing 'job'"
+            if (!t.why) errors << "$name: missing 'why'"
+
+            def hasValue = t.containsKey('value')
+            def hasModes = t.containsKey('dark') || t.containsKey('light')
+            if (hasValue && hasModes) errors << "$name: declares 'value' together with 'dark'/'light'"
+            if (!hasValue && !hasModes) errors << "$name: declares neither 'value' nor 'dark'/'light'"
+
+            // Unit conformance, skipping type styles which are structured objects
+            def pattern = UNITS[t.category as String]
+            if (pattern != null) {
+                [t.value, t.dark, t.light].findAll { it != null }.each { v ->
+                    if (!(v.toString() ==~ pattern)) {
+                        errors << "$name: value '$v' is not in the unit fixed for category '${t.category}'"
+                    }
+                }
+            }
+        }
+
+        if (errors) {
+            // Leave no partial output — R2 criterion 9
+            def out = generatedDir.get().asFile
+            if (out.exists()) out.deleteDir()
+            throw new GradleException("tokens.json is malformed:\n  " + errors.join('\n  '))
+        }
+
+        def pkgDir = new File(generatedDir.get().asFile, 'com/example/lightapp/designsystem/theme')
+        pkgDir.mkdirs()
+
+        // ─── helpers ───
+        def hexToColor = { String v ->
+            def parts = v.trim().split(' ')
+            def rgb = parts[0].substring(1).toUpperCase()
+            def alpha = parts.length > 1 ? (parts[1].replace('%', '') as int) : 100
+            def a = Math.round(alpha * 255 / 100.0d) as int
+            return "Color(0x${String.format('%02X', a)}${rgb})"
+        }
+        def dp = { String v -> "${v.replace('dp', '')}.dp" }
+        def ms = { String v -> v.replace('ms', '') }
+        def esc = { String s -> s.replace('\\', '\\\\').replace('"', '\\"') }
+
+        def byCat = { String c -> tokens.findAll { k, v -> v.category == c } }
+
+        def sb = new StringBuilder()
+        sb << '''// ╔═══════════════════════════════════════════════════════════════════════╗
+// ║  GENERATED FILE — DO NOT EDIT, DO NOT COMMIT                           ║
+// ║                                                                       ║
+// ║  Source:  design-canon/tokens.json                                    ║
+// ║  Task:    ./gradlew generateTokens                                    ║
+// ║                                                                       ║
+// ║  Hand edits do not survive a build. Change tokens.json instead.       ║
+// ╚═══════════════════════════════════════════════════════════════════════╝
+
+package com.example.lightapp.designsystem.theme
+
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+
+'''
+        // ─── colours ───
+        def colors = byCat('color')
+        def modeVarying = colors.findAll { k, v -> v.containsKey('dark') }
+        def modeInvariant = colors.findAll { k, v -> v.containsKey('value') }
+
+        sb << "/** Colour tokens that differ between modes. */\n"
+        sb << "internal interface ColorTokens {\n"
+        modeVarying.each { name, t -> sb << "    val ${name}: Color\n" }
+        sb << "}\n\n"
+
+        sb << "internal object DarkColorTokens : ColorTokens {\n"
+        modeVarying.each { name, t -> sb << "    override val ${name} = ${hexToColor(t.dark as String)}\n" }
+        sb << "}\n\n"
+
+        sb << "internal object LightColorTokens : ColorTokens {\n"
+        modeVarying.each { name, t -> sb << "    override val ${name} = ${hexToColor(t.light as String)}\n" }
+        sb << "}\n\n"
+
+        sb << "/** Colour tokens identical in both modes. */\n"
+        sb << "internal object FixedColorTokens {\n"
+        modeInvariant.each { name, t -> sb << "    val ${name} = ${hexToColor(t.value as String)}\n" }
+        sb << "}\n\n"
+
+        // ─── spacing ───
+        sb << "internal object SpacingTokens {\n"
+        byCat('spacing step').each { name, t -> sb << "    val ${name}: Dp = ${dp(t.value as String)}\n" }
+        sb << "}\n\n"
+
+        // ─── radii ───
+        sb << "internal object RadiusTokens {\n"
+        byCat('corner radius').each { name, t -> sb << "    val ${name}: Dp = ${dp(t.value as String)}\n" }
+        sb << "}\n\n"
+
+        // ─── strokes ───
+        sb << "internal object StrokeTokens {\n"
+        byCat('stroke').each { name, t -> sb << "    val ${name}: Dp = ${dp(t.value as String)}\n" }
+        sb << "}\n\n"
+
+        // ─── opacity ───
+        sb << "internal object OpacityTokens {\n"
+        byCat('opacity').each { name, t -> sb << "    const val ${name}: Float = ${t.value}f\n" }
+        sb << "}\n\n"
+
+        // ─── motion ───
+        sb << "internal object MotionTokens {\n"
+        byCat('motion duration').each { name, t -> sb << "    const val ${name}: Int = ${ms(t.value as String)}\n" }
+        byCat('easing').each { name, t ->
+            def nums = (t.value as String).findAll(/-?\d+\.?\d*/)
+            sb << "    val ${name}: List<Float> = listOf(${nums.collect { it + 'f' }.join(', ')})\n"
+        }
+        sb << "}\n\n"
+
+        // ─── type metrics ───
+        // Raw metrics only. Typography.kt maps `family` to a FontFamily by hand,
+        // because a generated reference to a font resource that is absent would not compile.
+        sb << "/** Type metrics. Font families are resolved in Typography.kt. */\n"
+        sb << "internal data class TypeMetrics(\n"
+        sb << "    val family: String,\n"
+        sb << "    val sizeSp: Float,\n"
+        sb << "    val lineHeightSp: Float,\n"
+        sb << "    val trackingEm: Float,\n"
+        sb << "    val weight: Int?,\n"
+        sb << "    val allCaps: Boolean,\n"
+        sb << "    val tabularFigures: Boolean,\n"
+        sb << ")\n\n"
+        sb << "internal object TypeTokens {\n"
+        byCat('type style').each { name, t ->
+            def v = t.value
+            def num = { String s -> s == null ? '0' : s.replaceAll(/[a-z]+$/, '') }
+            sb << "    val ${name} = TypeMetrics(\n"
+            sb << "        family = \"${esc(v.family as String)}\",\n"
+            sb << "        sizeSp = ${num(v.size as String)}f,\n"
+            sb << "        lineHeightSp = ${num(v.lineHeight as String)}f,\n"
+            sb << "        trackingEm = ${num(v.tracking as String)}f,\n"
+            sb << "        weight = ${v.weight != null ? v.weight : 'null'},\n"
+            sb << "        allCaps = ${v.allCaps ? 'true' : 'false'},\n"
+            sb << "        tabularFigures = ${v.tabularFigures ? 'true' : 'false'},\n"
+            sb << "    )\n"
+        }
+        sb << "}\n"
+
+        new File(pkgDir, 'Tokens.kt').text = sb.toString()
+
+        // ─── manifest for the validation suite (Requirement 18) ───
+        // Fields are copied verbatim; the generator does no interpretation here,
+        // so the suite validates the source rather than this task's opinion of it.
+        def mf = new StringBuilder()
+        mf << '''// GENERATED FILE — DO NOT EDIT, DO NOT COMMIT
+// Verbatim mirror of design-canon/tokens.json for Requirement 18.
+
+package com.example.lightapp.designsystem.theme
+
+internal data class TokenEntry(
+    val name: String,
+    val category: String,
+    val value: String?,
+    val dark: String?,
+    val light: String?,
+    val job: String,
+    val why: String,
+)
+
+internal val TOKEN_MANIFEST: List<TokenEntry> = listOf(
+'''
+        tokens.each { name, t ->
+            def q = { v -> v == null ? 'null' : "\"${esc(v instanceof Map ? groovy.json.JsonOutput.toJson(v) : v.toString())}\"" }
+            mf << "    TokenEntry(\"${name}\", \"${esc(t.category as String)}\", ${q(t.value)}, ${q(t.dark)}, ${q(t.light)}, ${q(t.job)}, ${q(t.why)}),\n"
+        }
+        mf << ")\n"
+        new File(pkgDir, 'TokenManifest.kt').text = mf.toString()
+
+        logger.lifecycle("generateTokens: ${tokens.size()} tokens -> ${pkgDir}")
+    }
+}
+
+android {
+    namespace 'com.example.lightapp.designsystem'
+    compileSdk 35
+
+    defaultConfig {
+        // minSdk 26 — decision D19. Compose applies FontVariation only from API 26,
+        // and the variable dot-size axis of the display face depends on it.
+        minSdk 26
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+    buildFeatures {
+        compose true
+    }
+    // composeOptions.kotlinCompilerExtensionVersion removed: from Kotlin 2.0 the
+    // Compose compiler ships as the org.jetbrains.kotlin.plugin.compose plugin above.
+    sourceSets {
+        main.java.srcDirs += generatedDir
+    }
+    testOptions {
+        unitTests.all {
+            // Surface the token validation failures readably
+            testLogging { events 'passed', 'failed', 'skipped' }
+        }
+    }
+
+    lint {
+        // AGP 8.5.2's bundled Android Lint cannot run on JDK 25 — it fails parsing the
+        // version string, the same family of problem as the Kotlin 1.9 daemon (D22).
+        // Scoping it off test sources avoids the failing analyse tasks while keeping
+        // lint on production code. Revisit when AGP is upgraded.
+        ignoreTestSources = true
+        abortOnError = false
+    }
+}
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    dependsOn 'generateTokens'
+}
+
+dependencies {
+    // Compose declared with `implementation`, never `api` — Requirement 15 criterion 2.
+    // Note: this does NOT remove Color/Dp from consumers' classpaths, because
+    // androidx.compose.ui:ui re-exports ui-graphics and ui-unit as `api`.
+    // The forbidden-type gate is the detekt rule bound to `check`. See rationale.md §9.
+    implementation platform('androidx.compose:compose-bom:2024.06.00')
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.material3:material3'
+
+    testImplementation 'junit:junit:4.13.2'
+}
+
+// The conformance checker is a build gate, not an optional step — decision D23.
+tasks.named('check') { dependsOn rootProject.tasks.named('conformanceCheck') }

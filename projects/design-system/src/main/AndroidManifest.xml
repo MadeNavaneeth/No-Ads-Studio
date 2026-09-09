@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Zero permissions. Never add one. See ideas/avoid.md and Requirement 4. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />

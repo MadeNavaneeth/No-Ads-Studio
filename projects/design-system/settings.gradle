@@ -1,0 +1,24 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    plugins {
+        id 'com.android.library' version '8.5.2' apply false
+        id 'org.jetbrains.kotlin.android' version '2.2.21' apply false
+        id 'org.jetbrains.kotlin.plugin.compose' version '2.2.21' apply false
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+// D35: design-system is now its own build under projects/ so every game project can
+// include it via Gradle composite builds (`includeBuild('../../design-system')`) and
+// consume it as the module `com.example.lightapp:design-system` — one source tree,
+// no published artifact, no copied tokens.
+rootProject.name = "design-system"

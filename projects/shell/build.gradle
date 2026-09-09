@@ -1,0 +1,70 @@
+// D35: the shared game-agnostic shell — a composite-build library module.
+//
+// Every game project includes this build via `includeBuild('../../shell')` and depends
+// on `implementation 'com.example.lightapp:shell'`. Because it is a plain library it
+// ships no APK itself; the game apps are the only artifacts.
+//
+// It carries NO Android app manifest, NO entrypoint, and NO per-game code. The
+// game-agnostic chrome — home, stats, settings, rules screens, the navigation bar, the
+// persistence layer, the game catalog contract — lives here once, and every game
+// project composites the same source, so a design fix stays one commit.
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.compose'
+}
+
+group = 'com.example.lightapp'
+
+android {
+    namespace 'com.example.lightapp'
+    compileSdk 35
+
+    defaultConfig {
+        // minSdk 26 — decision D19. Must match :design-system or the manifest merger fails.
+        minSdk 26
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+    buildFeatures {
+        compose true
+        // Needed so the composition guards can be strict in debug and no-op in release.
+        buildConfig true
+    }
+    lint {
+        // AGP 8.5.2's bundled Android Lint cannot run on JDK 25 — the same family of
+        // problem as the Kotlin 1.9 daemon (D22 / D24). Revisit when AGP is upgraded.
+        ignoreTestSources = true
+        abortOnError = false
+    }
+}
+
+dependencies {
+    // The one and only design source. Composite-substituted for the real module.
+    // Declared `api` here so that game projects that depend on the shell
+    // get the design-system theme and components transitively.
+    api 'com.example.lightapp:design-system'
+
+    // Compose — the screens use foundation layout (Column/Row/fillMaxWidth/
+    // rememberScrollState), material3, and ui directly.
+    implementation platform('androidx.compose:compose-bom:2024.06.00')
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.foundation:foundation'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.activity:activity-compose:1.9.0'
+
+    // Persistence — decision D7. DataStore, not Room.
+    implementation 'androidx.datastore:datastore-preferences:1.1.1'
+
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4'
+    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.8.4'
+
+    testImplementation 'junit:junit:4.13.2'
+}

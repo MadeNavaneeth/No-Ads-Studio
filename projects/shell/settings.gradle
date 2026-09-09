@@ -1,0 +1,30 @@
+// D35: the shared game-agnostic shell. Included by every game project as a composite
+// build (`includeBuild('../../shell')`) and consumed as the module
+// `com.example.lightapp:shell`. Owns the chrome: home/stats/settings/rules screens,
+// the persistence layer, MainActivity wiring — but no per-game code whatsoever.
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    plugins {
+        id 'com.android.library' version '8.5.2' apply false
+        id 'org.jetbrains.kotlin.android' version '2.2.21' apply false
+        id 'org.jetbrains.kotlin.plugin.compose' version '2.2.21' apply false
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "shell"
+
+// The shell is built both standalone (for its own test run) and as a composite
+// dependency of every game project. This includeBuild makes its own `./gradlew test`
+// resolve the one design-system source; when a game project includes both builds,
+// the game's includes take precedence and both point at the same directory anyway.
+includeBuild('../design-system')

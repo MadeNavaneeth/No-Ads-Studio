@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Verify before done",
+      "trigger": "Stop",
+      "description": "On completion, reminds the agent to run the conformance + test gate and act on the FIX lines before treating a code task as done. A safety net for models that declare done without verifying.",
+      "action": {
+        "type": "agent",
+        "prompt": "Before treating this as done: if you changed any Kotlin, Gradle, resource, or design-canon file this turn, run `./gradlew assembleDebug check` from `projects/Sudoku/` and confirm it prints \"rules, 0 violations\" with no failed tests. Every conformance failure prints a `FIX:` line stating the exact edit — apply it and re-run rather than guessing. For a quick inner loop use `./gradlew conformanceCheck -Pconformance.fast=true`. Do not report a code task complete while any rule fails or any test is red. If you only answered a question or changed nothing that compiles, disregard this."
+      }
+    }
+  ]
+}
