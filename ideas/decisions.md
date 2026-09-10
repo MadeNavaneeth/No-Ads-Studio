@@ -848,6 +848,16 @@ differ by mode rather than by token.
 
 **Cost:** two PNGs today, more per component hereafter — each a deliberate, reviewable diff.
 
+*(Amended same day: the gate now spans all four tiers — 21 goldens, every component in the
+library. Tier 2: `Label`/`NothingText` roles, `NothingButton` emphases + disabled/selected,
+`NothingCard`, `GridCell` across given/entered/conflict/selection, `NumberPad` with remaining
+badges, `DotMatrixReadout` rising. Tier 3: chrome and the Glyph small forms — `NothingTopBar`,
+`NothingBottomNav`, `DifficultyPicker`, `DotPulse`, `SlideDotIndicator`, `GameIcon`. Tier 4: all
+six game cells — `AkariCell`, `BinairoCell`, `ConnectCell`, `MinesweeperCell` (the studio's one
+live red), `NonogramCell`, `WordsearchCell`. A second mutation — `NothingCard`'s unpressed fill
+one surface step — failed `verifyRoborazziDebug` on exactly that golden and reverting passed,
+so the drift-proofing holds at full breadth.)*
+
 ## Build order
 
 Strictly sequential. Each step leaves the project compiling.
