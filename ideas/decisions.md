@@ -812,7 +812,9 @@ undo (D34), stats (D26), daily (D32), and red-budget contracts. Games #16–100 
 archetype, inherit its contracts, and port the blueprint's test *categories*. Ten archetypes
 are chartered; eight have implemented (pre-launch) blueprints; kakuro and hitori wait for
 theirs. Binairo's missing generator/restore/daily suites are recorded in its intent file as a
-gate on its serving as any family's blueprint.
+gate on its serving as any family's blueprint. *(Amended same day: the suites landed and
+binairo's `check` runs green — the gate is satisfied and the binary-constraint archetype stands
+proven.)*
 
 **Cost:** one page per game to keep honest. The alternative is folklore, which is how the
 D32/D35 tangle happened.

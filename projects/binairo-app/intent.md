@@ -38,6 +38,7 @@ Bounded undo, D34 parity. Red: none.
 None.
 
 ## Tests
-`BinairoRulesTest`. **Known gap:** generator, restore, daily, and transition suites do not
-exist yet — the archetype charter requires them before this game may serve as the family's
-blueprint for others.
+`BinairoRulesTest`, `BinairoGeneratorTest` (determinism, budget ordering, start-state shape),
+`BinairoRestoreTest` (restore + codec; a given-mask disagreement is a save that never shipped),
+`BinairoDailyTest`, `BinairoTransitionsTest`. The archetype charter's full set is present —
+binairo may serve as the binary-constraint family's blueprint.
