@@ -819,6 +819,35 @@ proven.)*
 **Cost:** one page per game to keep honest. The alternative is folklore, which is how the
 D32/D35 tangle happened.
 
+## D39 — The screen gate: Roborazzi goldens over Robolectric
+
+**2026-09-10.** Build-order step 10 lands: golden screenshot
+tests of the design system's components at their token-boundary states, rendered on the JVM —
+no emulator, no device. First captures: `BlockCell` in both states, `BlockPiece` at all three
+dot densities (D33's ruling — the distinction the language makes instead of colour).
+
+**The tool is Roborazzi, not Paparazzi.** D9 named Paparazzi; `ideas/tooling-research.md` Tier 1
+supersedes it: Roborazzi runs on Robolectric, handles multi-frame interaction shots, and is the
+current community default. The decision stands; the name updates. Both arrive as
+`testImplementation` only plus the Gradle plugin (`record`/`verify` modes) — nothing here can
+reach a release artifact, and `dependency-denylist.md` records all three coordinates
+(`roborazzi`, `robolectric`, the JDK-25 ASM force — the D22/D24 family again) as permitted.
+
+**Committed goldens under `design-system/src/test/snapshots/`, compared by `check`.** A capture
+is committed; a change that reaches the pixels — a token swapped for another, a density
+rewritten, a stroke off by a hair — must be a deliberate re-capture in the same commit, or the
+build fails. Verified the honest way: mutating `BlockCell`'s filled fill one step fails
+`verifyRoborazziDebug` on exactly that golden, and reverting passes. `**/out/failures/` (the
+failure diffs) is gitignored; the goldens are not.
+
+**What this does not do:** goldens pin the components, not the games. A game's screen can still
+misuse a correct component — that is what the four review tests in `nothing-study.md` §12 are
+for, still by hand. And Robolectric pins `ThemeMode.Dark` explicitly: a golden must not move
+because a test host's system setting did. Light-mode captures arrive when a component's states
+differ by mode rather than by token.
+
+**Cost:** two PNGs today, more per component hereafter — each a deliberate, reviewable diff.
+
 ## Build order
 
 Strictly sequential. Each step leaves the project compiling.

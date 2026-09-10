@@ -4,6 +4,10 @@ plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
     id 'org.jetbrains.kotlin.plugin.compose'
+    // D39 — the screen gate. Provides record/verify modes for the golden tests:
+    //   ./gradlew recordRoborazziDebug   (re-capture on a deliberate change)
+    //   ./gradlew verifyRoborazziDebug   (the build-failing comparison)
+    id 'io.github.takahirom.roborazzi' version '1.26.0'
 }
 
 // D35: this build is included by every game project as a composite build
@@ -261,9 +265,14 @@ android {
         main.java.srcDirs += generatedDir
     }
     testOptions {
-        unitTests.all {
-            // Surface the token validation failures readably
-            testLogging { events 'passed', 'failed', 'skipped' }
+        unitTests {
+            // Robolectric (D39's screenshot gate) needs the resource pipeline on the
+            // JVM: without this the test APK has no resources to inflate.
+            includeAndroidResources = true
+            all {
+                // Surface the token validation failures readably
+                testLogging { events 'passed', 'failed', 'skipped' }
+            }
         }
     }
 
@@ -292,11 +301,37 @@ dependencies {
     implementation 'androidx.compose.material3:material3'
 
     testImplementation 'junit:junit:4.13.2'
+
+    // D39 — the screen gate (build-order step 10). Roborazzi over Robolectric,
+    // D34 Tier 1: JVM screenshot tests, no emulator, test-time only — nothing
+    // here can reach a release artifact. Golden captures land in
+    // src/test/snapshots/ (outside res/ and assets/, so R4 stays silent) and
+    // are committed: a spacing token swapped for another must fail a build.
+    testImplementation 'org.robolectric:robolectric:4.14.1'
+    testImplementation 'io.github.takahirom.roborazzi:roborazzi:1.26.0'
+    // Robolectric's sandbox re-instruments classes with its bundled ASM, which
+    // predates the Java 25 class-file format this toolchain produces (major 69)
+    // — the same JDK 25 family of gaps as D22/D24. Forcing current ASM lets the
+    // sandbox read what it is handed. Drop when Robolectric ships this itself.
+    testImplementation 'org.ow2.asm:asm:9.9'
+    testImplementation 'org.ow2.asm:asm-commons:9.9'
+    testImplementation 'org.ow2.asm:asm-tree:9.9'
+    testImplementation platform('androidx.compose:compose-bom:2024.06.00')
+    testImplementation 'androidx.compose.ui:ui-test-junit4'
+    testImplementation 'androidx.compose.ui:ui-test-manifest'
 }
 
 // The conformance checker is a build gate, not an optional step — decision D23.
 // D37: the checker lives in the repo-root `conformance` build, included below.
-tasks.named('check') { dependsOn gradle.includedBuild('conformance').task(':conformanceCheck') }
+// D39: the golden comparison is a build gate too — a spacing token swapped for
+// another fails here, not in a reviewer's eyes. `verifyRoborazziDebug` runs in
+// both record-friendly workflows and CI (`check` always compares); to re-capture
+// on a deliberate visual change, run `./gradlew recordRoborazziDebug` first and
+// commit the new goldens in the same change.
+tasks.named('check') {
+    dependsOn 'verifyRoborazziDebug'
+    dependsOn gradle.includedBuild('conformance').task(':conformanceCheck')
+}
 
 // AGP 8.5.2's bundled Lint cannot run on JDK 25 (D22/D24) — every lintAnalyze dies and
 // takes check down with it. Disabled until the AGP upgrade; the conformance gate covers

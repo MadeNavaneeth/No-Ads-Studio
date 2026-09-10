@@ -77,7 +77,9 @@ Recorded so the checker is not argued with case by case.
 | Coordinate | Why it is fine |
 |---|---|
 | `androidx.datastore:datastore-preferences` | The chosen persistence layer, D7. No processor. |
-| `app.cash.paparazzi` | `testImplementation` only. JVM screenshot tests, never in a release artifact. |
+| `io.github.takahirom.roborazzi` | `testImplementation` only, plus its Gradle plugin. JVM screenshot tests (D39, superseding decision D9's Paparazzi per `ideas/tooling-research.md` Tier 1), never in a release artifact. |
+| `org.robolectric:robolectric` | `testImplementation` only. Roborazzi's rendering engine; arrives with it, nothing extra. |
+| `org.ow2.asm` | `testImplementation` only. Robolectric's sandbox predates the JDK 25 class-file format (D22/D24 family); the forced current ASM lets it read what the toolchain produces. Drop when Robolectric ships this itself. |
 | `com.lemonappdev:konsist` | `testImplementation` only. The architecture test of R15. |
 | `io.gitlab.arturbosch.detekt` | Static analysis for the R15 forbidden-type gate. Build tooling, not a runtime dependency. |
 | `com.vk.vkompose` | `detektPlugins` and Gradle plugin only. Blocks recomposition defects at compile time, making the `avoid.md` recomposition rule enforceable. See `ideas/learning-library.md` §6. |
