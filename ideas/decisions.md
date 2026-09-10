@@ -793,6 +793,30 @@ are rewritten for the composite layout: a game exists when its project exists, i
 `GameRegistry` registers its Definition, and the roadmap lists it — the same admission chain,
 one project at a time.
 
+## D38 — The intent harness: one `intent.md` per game, and the archetype layer
+
+2026-09-10. Two gaps in how knowledge reaches game #10 and beyond: a shipped game's specific
+contracts (grid rules, generation contract, red budget, persistence keys, suite contents) lived
+diffusely across roadmap tables, method tables, and code comments; and nothing stood between
+"answer the eight questions from scratch" and game #50.
+
+**Ruling:** every game project carries an `intent.md` — one page recording that game's exact
+answers: mechanic, grid rules, generation, win/lose, the three readouts, input verbs, undo and
+red budget, persistence keys, theme overrides, and the test suite that holds it provable. The
+file is written when the game is admitted and updated with any contract change; a contract
+departure from its archetype is a decision in this log, never a silent divergence.
+
+Above it, `design-canon/archetypes.md` charters the mechanic families: an archetype is a family
+whose blueprint game has demonstrated, in working code, the seeded-generator-and-proof, restore,
+undo (D34), stats (D26), daily (D32), and red-budget contracts. Games #16–100 declare an
+archetype, inherit its contracts, and port the blueprint's test *categories*. Ten archetypes
+are chartered; eight have implemented (pre-launch) blueprints; kakuro and hitori wait for
+theirs. Binairo's missing generator/restore/daily suites are recorded in its intent file as a
+gate on its serving as any family's blueprint.
+
+**Cost:** one page per game to keep honest. The alternative is folklore, which is how the
+D32/D35 tangle happened.
+
 ## Build order
 
 Strictly sequential. Each step leaves the project compiling.

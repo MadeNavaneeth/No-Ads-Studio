@@ -16,6 +16,7 @@ documents named, and start. Everything else is reference you can look up when a 
 | Your task | Read, in this order | Then |
 |---|---|---|
 | **Add a new game** | `design-canon/game-design-method.md` → `design-canon/game-scaffold.md` | Copy the scaffold, fill the eight answers |
+| **Work on a shipped game's mechanics** | `projects/<game>-app/intent.md` → `design-canon/archetypes.md` | Stay inside the recorded contract (D38) |
 | **Ship a game as its own app** | `ideas/decisions.md` D36/D37 → a `projects/<game>-app` sibling | Copy a game app, point its registry at the new game |
 | **Build a screen for an existing game** | `design-canon/component-specs.md` (the screen's own section) | Implement literally |
 | **Add or change a component** | `design-canon/component-specs.md` → `design-canon/nothing-design-system.md` §2 | Add the spec heading *and* the function, or `R5` fails |
@@ -135,6 +136,7 @@ design-canon/                 authoritative design language
   rationale.md            ★ why every value is what it is + the honest guarantee ladder
   game-design-method.md   ★ how to translate a NEW game into this language. Start here for game 2+.
   game-scaffold.md        ★ the code to copy for a new game. Companion to the method.
+  archetypes.md           ★ the mechanic families games inherit from; blueprint registry (D38).
   nothing-study.md            why Nothing works, do/don't, the four review tests
   sudoku-market-study.md      the most-played sudoku app — mechanisms, refusals, and the
                               two-layer highlight §5A ADOPTED (D30 amended 2026-09-03)
