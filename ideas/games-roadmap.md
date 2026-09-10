@@ -54,7 +54,7 @@ and buildable with our motion rules.
 | 5 | **Word Search** | large established category | letter grid. First bundled data, ~20KB word list. | **Tier 3** |
 | 6 | Block Puzzle | **+176.1%**, fastest growing | shapes on a grid, no assets | **Tier 3** (ruled D33) |
 | 7 | **Akari** (Light Up) | niche, Nikoli classic | dots + numbers. *Placing lights* — a thematic bullseye for Nothing. | **Tier 2**, implemented |
-| 8 | Binairo | niche | a grid of two states. Monochrome by definition. | backlog |
+| 8 | **Binairo** | niche | a grid of two states. Monochrome by definition. | **Tier 2**, implemented (D37) |
 | 9 | Kakuro | established Nikoli | numbers only, sum constraints | backlog |
 | 10 | Hitori | niche | blacken cells to remove duplicates — monochrome by design | backlog |
 
@@ -110,7 +110,7 @@ A candidate enters the catalog only by passing every criterion. Measured on the 
 
 ### Tier 1
 
-**`sudoku(9)`** — status `implemented`
+**`sudoku(9)`** — status `implemented`, ships standalone as `sudoku`
 
 | | |
 |---|---|
@@ -124,7 +124,7 @@ A candidate enters the catalog only by passing every criterion. Measured on the 
 
 ### Tier 2
 
-**`nonogram(10)`** — status `implemented`, ships as part of `studio` and standalone as `nonogram`
+**`nonogram(10)`** — status `implemented`, ships standalone as `nonogram`
 
 | | |
 |---|---|
@@ -136,7 +136,7 @@ A candidate enters the catalog only by passing every criterion. Measured on the 
 | Target | 3–8 min at 10×10 |
 | Data | none, generated from a seed |
 
-**`minesweeper(10)`** — status `implemented`, ships as part of `studio` and standalone as `minesweeper`
+**`minesweeper(10)`** — status `implemented`, ships standalone as `minesweeper`
 
 | | |
 |---|---|
@@ -148,7 +148,7 @@ A candidate enters the catalog only by passing every criterion. Measured on the 
 | Target | 2–6 min at 9×9 with 10 mines |
 | Data | none, generated |
 
-**`akari(10)`** — status `implemented`, ships as part of `studio` and standalone as `akari`
+**`akari(10)`** — status `implemented`, ships standalone as `akari`
 
 | | |
 |---|---|
@@ -160,9 +160,21 @@ A candidate enters the catalog only by passing every criterion. Measured on the 
 | Target | 5–15 min at 10×10 |
 | Data | none, generated |
 
+**`binairo(10)`** — status `implemented`, ships standalone as `binairo` (admitted from backlog, D37)
+
+| | |
+|---|---|
+| Generator | seeded complete solution carved down by a deduction solver: every removed cell is re-derivable by forced logic, which proves the board has exactly one solution — the sudoku admission bar, hand-rolled (Akari's analogue) |
+| Grid | 10×10, three states per cell: dot (one), ring (zero), or undecided, plus givens that refuse input |
+| Input | tap cycles undecided → dot → ring → undecided; givens are structural refusals |
+| Win | no three consecutive agree in any row or column, every line holds five of each, no two lines identical — one predicate over the board |
+| Exercises | reuses grid cell, undo history (D34), and the tap-cycle verb; the two states are dot density itself — solid dot vs hollow ring — so the game needs no device the language does not already own |
+| Target | 5–12 min at 10×10 |
+| Data | none, generated |
+
 ### Tier 3
 
-**`connect(7)`** — status `implemented`, ships as part of `studio` and standalone as `connect`
+**`connect(7)`** — status `implemented`, ships standalone as `connect`
 
 | | |
 |---|---|
@@ -175,7 +187,7 @@ A candidate enters the catalog only by passing every criterion. Measured on the 
 | Data | none, generated |
 | Monochrome note | endpoints carry **numerals**, not colours — this is the whole adaptation |
 
-**`wordsearch(12)`** — status `implemented`, ships as part of `studio` and standalone as `wordsearch`
+**`wordsearch(12)`** — status `implemented`, ships standalone as `wordsearch`
 
 | | |
 |---|---|
@@ -191,8 +203,8 @@ A candidate enters the catalog only by passing every criterion. Measured on the 
 
 | Component | Used by |
 |---|---|
-| Grid cell | all eight |
-| Top bar, dot-matrix readout, pill button, persistence | all eight |
+| Grid cell | all nine |
+| Top bar, dot-matrix readout, pill button, persistence | all nine |
 | Number pad | Sudoku |
 | Drag input | Nonogram → Connect, Word Search, Block Puzzle |
 | Long-press | Nonogram → Minesweeper |
@@ -200,7 +212,7 @@ A candidate enters the catalog only by passing every criterion. Measured on the 
 | Numeral over a void | Minesweeper → Akari |
 | Piece tray | Block Puzzle |
 
-**`blockpuzzle(8)`** — status `implemented`, ships as part of `studio` and standalone as `blockpuzzle`
+**`blockpuzzle(8)`** — status `implemented`, ships standalone as `blockpuzzle`
 
 | | |
 |---|---|

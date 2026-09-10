@@ -60,9 +60,14 @@ class AkariTransitionsTest {
         repeat(AkariHistory.DEFAULT_BOUND + 10) { i ->
             history.record(AkariHistory.Move(index = i % AkariRules.CELLS, previousValue = i))
         }
-        // The ten oldest entries are gone: the first pop is entry 10, not entry 0.
-        assertEquals(AkariHistory.Move(index = 10 % AkariRules.CELLS, previousValue = 10), history.revert())
-        assertEquals(AkariHistory.DEFAULT_BOUND - 1, count(history))
+        // The newest entry is still on top — undo is LIFO at the bound.
+        assertEquals(AkariHistory.Move(index = 59, previousValue = 59), history.revert())
+        // Draining the rest, the last survivor is entry 10: the ten oldest
+        // entries (0–9) were evicted oldest-first, exactly the G4 contract.
+        var last: AkariHistory.Move? = null
+        while (history.revert()?.also { last = it } != null) { /* drain */ }
+        assertEquals(AkariHistory.Move(index = 10, previousValue = 10), last)
+        assertFalse(history.canUndo)
     }
 
     @Test
@@ -72,11 +77,5 @@ class AkariTransitionsTest {
         history.clear()
         assertFalse(history.canUndo)
         assertNull(history.revert())
-    }
-
-    private fun count(history: AkariHistory): Int {
-        var n = 0
-        while (history.revert() != null) n++
-        return n
     }
 }

@@ -28,3 +28,4 @@ rootProject.name = "shell"
 // resolve the one design-system source; when a game project includes both builds,
 // the game's includes take precedence and both point at the same directory anyway.
 includeBuild('../design-system')
+includeBuild('../../conformance')  // D37: the repo-root conformance gate.

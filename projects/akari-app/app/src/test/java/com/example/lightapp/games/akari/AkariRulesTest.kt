@@ -16,9 +16,12 @@ class AkariRulesTest {
     private fun List<Int>.with(index: Int, value: Int): List<Int> =
         toMutableList().also { it[index] = value }
 
-    /** A real solved position: four regions split by a wall cross at rows and
-     *  columns 3 and 7, each region covered by bulbs on its local diagonal —
-     *  every white cell lit, no two bulbs sharing a run, no clues to satisfy. */
+    /** A real solved position: a wall cross at rows and columns 3 and 7 cuts the
+     *  board into nine regions. Each 3×3 region carries bulbs on its local
+     *  diagonal; the 3×2 and 2×3 regions carry the two-bulb pairing (one bulb
+     *  per row and per column used, lights the rest by column); the 2×2 needs
+     *  both diagonal bulbs (one leaves the anti-diagonal dark). Every white cell
+     *  lit, no two bulbs sharing a run, no clues. */
     private fun solvedBoard(): List<Int> {
         var cells = empty()
         for (i in 0 until AkariRules.CELLS) {
@@ -26,7 +29,17 @@ class AkariRulesTest {
             val c = AkariRules.colOf(i)
             if (r == 3 || r == 7 || c == 3 || c == 7) cells = cells.with(i, AkariRules.WALL)
         }
-        for (b in listOf(0, 8, 11, 19, 22, 40, 51, 62, 88, 99)) {
+        for (b in listOf(
+            0, 11, 22,    // rows 0-2, cols 0-2: diagonal
+            4, 15, 26,    // rows 0-2, cols 4-6: diagonal
+            8, 19,        // rows 0-2, cols 8-9: pairing
+            40, 51, 62,   // rows 4-6, cols 0-2: diagonal
+            44, 55, 66,   // rows 4-6, cols 4-6: diagonal
+            48, 59,       // rows 4-6, cols 8-9: pairing
+            80, 91,       // rows 8-9, cols 0-2: pairing
+            84, 95,       // rows 8-9, cols 4-6: pairing
+            88, 99,       // rows 8-9, cols 8-9: both diagonals
+        )) {
             cells = cells.with(b, AkariRules.BULB)
         }
         return cells

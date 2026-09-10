@@ -733,8 +733,8 @@ Only one game may be `in_progress` at a time (`M3`, enforced). Move the previous
 ## Before you say it works
 
 ```bash
-cd projects/Sudoku
-./gradlew assembleDebug check    # in that order — see the note in AGENTS.md § Commands
+cd projects/<game>-app
+./gradlew check                  # this project's tests + the 33-rule repo gate
 ```
 
 Then the part the build cannot do — the `R` list in `rules.md`, and these four:

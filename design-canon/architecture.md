@@ -27,26 +27,33 @@ Root markdown is limited to `README.md`, `AGENTS.md`, `CLAUDE.md`. Nothing else.
 
 ---
 
-## 2. `projects/Sudoku/` — the Gradle project
+## 2. `projects/` — the Gradle builds
+
+One Gradle build per project (D36), composed into a tree (D37):
 
 ```
-projects/Sudoku/
-├── settings.gradle               includes ':app' and ':design-system'
-├── build.gradle                  root: plugin versions only, no dependencies
+projects/
+├── <game>-app/ × 8          one self-contained app per game; each consumes the two
+│                            libraries below as includeBuilds and carries its own
+│                            manifest, GameRegistry, and entry point
+├── shell/                   ← the game-agnostic chrome (nav, home, stats, settings)
+└── design-system/           ← the Design_System_Module
+
+Every one of these builds also includeBuilds the repo-root conformance/ gate,
+which binds its 33 rules to each project's `check` (D37).
+
+Each build:
+├── settings.gradle          includes ':app' (or ':design-system') + the composite includeBuilds
+├── build.gradle             root: plugin versions only, no dependencies
 ├── gradle.properties
 ├── gradlew · gradlew.bat · gradle/wrapper/
-├── local.properties              gitignored — sdk.dir only
-│                                 (.gitignore lives at the workspace root, covering all of this)
-│
-├── build-logic/                  Gradle convention plugins + the token generator
-│   └── src/main/kotlin/
-│       ├── GenerateTokensTask.kt         reads ../../../design-canon/tokens.json
-│       ├── ConformanceCheckTask.kt       the single-command checker
-│       └── nothing.android.conventions.gradle.kts
-│
-├── design-system/                ← the Design_System_Module
-└── app/                          ← the Consumer_Module
+└── local.properties         gitignored — sdk.dir only
+                             (.gitignore lives at the workspace root, covering all of this)
 ```
+
+The token generator lives in `design-system/build.gradle` (`generateTokens`, reading
+`../../design-canon/tokens.json`); the conformance checker lives in `conformance/build.gradle`
+— there is no `build-logic/` in the composite layout.
 
 ---
 
@@ -219,12 +226,14 @@ listings and the licence isolation without a module graph to maintain.
 ## 7. Build and check
 
 ```bash
-cd projects/Sudoku
-./gradlew generateTokens        # tokens.json → build/generated/Tokens.kt
-./gradlew check                 # unit tests + token validation + architecture test + static gate
-./gradlew conformanceCheck      # harness structure, anti-requirements, doc/code agreement
-./gradlew assembleDebug
-./gradlew bundleRelease         # R8 minified .aab
+cd projects/<name>
+./gradlew check                                  # unit tests + the 33-rule gate (composite-wired)
+./gradlew :conformance:conformanceCheck -Pconformance.fast=true   # the gate alone, seconds
+./gradlew :app:assembleDebug
+./gradlew :app:bundleRelease                     # unsigned .aab (add signing before real use)
+
+# design-system only:
+./gradlew generateTokens       # tokens.json → generated Kotlin
 ```
 
 `generateTokens` must run before any compilation that consumes a token. `check` must be a build gate,

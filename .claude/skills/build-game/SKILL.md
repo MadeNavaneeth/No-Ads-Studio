@@ -1,6 +1,6 @@
 ---
 name: build-game
-description: Build a Nothing Games Studio game or screen with minimal token spend. Use when the task is adding a game, building a screen, adding a component, fixing a game bug, or any work inside projects/Sudoku.
+description: Build a Nothing Games Studio game or screen with minimal token spend. Use when the task is adding a game, building a screen, adding a component, fixing a game bug, or any work inside projects/.
 version: 1.0.0
 allowed-tools: [Read, Write, Edit, Glob, Grep]
 status: canonical
@@ -17,6 +17,6 @@ The short version if the kit is already loaded:
 2. Implement your game's MUST rows in `ideas/market-parity.md`, none of REFUSE.
 3. Copy `design-canon/game-scaffold.md` for new games; build screens literally
    from `design-canon/component-specs.md`; values only from `design-canon/tokens.json`.
-4. Iterate with `./gradlew conformanceCheck -Pconformance.fast=true`, finish
-   with `./gradlew assembleDebug check` from `projects/Sudoku/`. Do what every
-   `FIX:` line says. Both APKs current before done. One game `in_progress` at a time.
+4. Iterate with `./gradlew :conformance:check -Pconformance.fast=true`, finish
+   with `./gradlew check` from the project you touched. Do what every
+   `FIX:` line says. Every consuming app current before done. One game `in_progress` at a time.

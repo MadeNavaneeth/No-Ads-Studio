@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- See values/colors.xml. Mirrors tokens.json `bg`.dark — true black, for OLED. -->
-<resources>
-    <color name="launch_background">#000000</color>
-</resources>

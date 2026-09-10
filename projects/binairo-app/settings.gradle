@@ -1,4 +1,4 @@
-// D35: standalone minesweeper(9) app — a self-contained Android project.
+// D37: standalone binairo(10) app — a self-contained Android project.
 //
 // Includes the shared design-system and shell as composite builds so this project
 // compiles the same source as every other game. The shell provides the chrome
@@ -28,3 +28,4 @@ include ':app'
 // Composite builds: the design system and the shared shell.
 includeBuild('../design-system')
 includeBuild('../shell')
+includeBuild('../../conformance')  // D37: the repo-root conformance gate.

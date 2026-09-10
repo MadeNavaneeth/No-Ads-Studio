@@ -17,25 +17,15 @@ class BinairoRulesTest {
     private fun List<Int>.with(index: Int, value: Int): List<Int> =
         toMutableList().also { it[index] = value }
 
-    /** A real solved position: rows alternate between a balanced no-run pattern and
-     * its complement, with even rows past the first flipped in one column pair so
-     * no two rows repeat. Columns balance by symmetry and stay run-free. */
+    /** A real solved position: every row and every column is a distinct cyclic
+     * shift of `s`, which is balanced (5/5), has no circular run of three, and has
+     * full period — so no two rows repeat and no two columns repeat. */
     private fun solvedBoard(): List<Int> {
-        val a = intArrayOf(1, 1, 0, 0, 1, 0, 1, 0, 1, 0) // 1 = ONE, 0 = ZERO
-        val b = intArrayOf(0, 0, 1, 1, 0, 1, 0, 1, 0, 1) // a's complement
-        val grid = Array(10) { r ->
-            val row = (if (r % 2 == 0) a else b).copyOf()
-            if (r in 2..8 && r % 2 == 0) {
-                // Flip columns 4 and 5: 1,0 -> 0,1 keeps balance, cannot create a
-                // run (neighbours differ), and differs from both a and b there.
-                row[4] = 0
-                row[5] = 1
-            }
-            row
-        }
+        val s = intArrayOf(1, 1, 0, 0, 1, 0, 1, 0, 1, 0) // 1 = ONE, 0 = ZERO
         return List(BinairoRules.CELLS) { i ->
-            if (grid[BinairoRules.rowOf(i)][BinairoRules.colOf(i)] == 1) BinairoRules.ONE
-            else BinairoRules.ZERO
+            val r = BinairoRules.rowOf(i)
+            val c = BinairoRules.colOf(i)
+            if (s[(c - r + 10) % 10] == 1) BinairoRules.ONE else BinairoRules.ZERO
         }
     }
 

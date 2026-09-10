@@ -16,7 +16,7 @@ documents named, and start. Everything else is reference you can look up when a 
 | Your task | Read, in this order | Then |
 |---|---|---|
 | **Add a new game** | `design-canon/game-design-method.md` → `design-canon/game-scaffold.md` | Copy the scaffold, fill the eight answers |
-| **Ship a game as its own app** | `ideas/decisions.md` D25 → `design-canon/architecture.md` §6 | Add a flavour + a `srcDirs` line |
+| **Ship a game as its own app** | `ideas/decisions.md` D36/D37 → a `projects/<game>-app` sibling | Copy a game app, point its registry at the new game |
 | **Build a screen for an existing game** | `design-canon/component-specs.md` (the screen's own section) | Implement literally |
 | **Add or change a component** | `design-canon/component-specs.md` → `design-canon/nothing-design-system.md` §2 | Add the spec heading *and* the function, or `R5` fails |
 | **Change a design value** | `design-canon/rationale.md` (the section for that value) → `design-canon/tokens.json` | Never edit generated code |
@@ -25,31 +25,33 @@ documents named, and start. Everything else is reference you can look up when a 
 | **Check your work** | `design-canon/rules.md` — the review list | `./gradlew check` |
 | **Orient as a new agent (or model)** | `ideas/agent-playbook.md` — direction, recipes, and hard-won scars | Then this file's router |
 
-**The single most useful thing to know:** run `./gradlew assembleDebug check` from
-`projects/Sudoku/`. It enforces 36 conformance rules plus 245 tests, and reports the file, line, rule id
+**The single most useful thing to know:** run `./gradlew check` from any `projects/<name>/` directory.
+It runs that project's tests plus the repo-root conformance gate (`:conformance:check`, composite-wired
+into every project's `check` — D37), and reports the file, line, rule id
 and authority for every
 violation. You do not need to memorise what it covers — it will tell you. Spend your attention on the rules
 marked **`R`** in `rules.md`, because those are the only ones it cannot see.
 
-**All seven flavours, every round.** A code change is not finished until **every shipped flavour** is
-current: `assembleDebug` builds all of them together (studio plus the six standalone games — sudoku,
-nonogram, minesweeper, connect, wordsearch), and when a change is verified on the emulator, reinstall
-**all six** (`:app:assembleStudioDebug :app:assembleSudokuDebug :app:assembleNonogramDebug
-:app:assembleMinesweeperDebug :app:assembleConnectDebug :app:assembleWordsearchDebug`, then
-`adb install -r` each). A studio build that looks right is not done if a standalone still runs the
-previous build — they share one source tree.
+**One game, one app — check the neighbours anyway.** Each game ships from its own project
+(`projects/<game>-app`), consuming `projects/design-system` and `projects/shell` as composite builds
+(D36). A change to a shared library is not finished until every consuming app is still current:
+`for p in projects/*-app; do (cd "$p" && ./gradlew check); done`. When a change is verified on the
+emulator, reinstall every affected app (`scripts/run-on-emu.sh <game>` per game). A build that looks
+right is not done if a sibling app still runs the previous build — they share one source tree.
 
 **The checker writes the fix, not just the complaint.** Every conformance failure prints a `FIX:` line with
 the exact edit — literal-to-token, the missing modifier, the file to move. Do what it says and re-run; you
 rarely need to open the authority document. For a fast inner loop that skips the build,
-`./gradlew conformanceCheck -Pconformance.fast=true` runs the rules in a second or two.
+`./gradlew :conformance:conformanceCheck -Pconformance.fast=true` (from any project) runs the rules in a
+second or
+two.
 
 Two things run automatically so you cannot skip them: an always-on steering file (`.kiro/steering/`) keeps
 the non-negotiables in context every turn, and a `Stop` hook (`.kiro/hooks/verify-before-done.json`) reminds
 you to run the gate before finishing a code change. Neither replaces running `check` — they make forgetting
 harder.
 
-**A local device is available for real checks — decision D28.** `projects/Sudoku/scripts/` manages one
+**A local device is available for real checks — decision D28.** `scripts/` (repo root) manages one
 lightweight AVD (`nas-fast`) so verifying a change on-device never means manually building and installing
 an APK:
 
@@ -63,9 +65,8 @@ scripts/emu-stop.sh               # stop it
 Two non-obvious host-specific fixes are baked into `emu-start.sh` — `-gpu swiftshader_indirect` and no
 `-no-window` — because this host's real config silently returned a black frame from every screenshot
 otherwise, on an image that was in every other respect working correctly. See D28 before changing either
-flag or switching system images. `app/keystore/local-verify.jks` is a throwaway signing key so a real
-`assembleRelease`/`bundleRelease` can be exercised before a production Play key exists; it must never be
-that production key.
+flag or switching system images. Release signing is not configured in the composite tree yet; add a throwaway `local-verify.jks`
+(gitignored, never the production key) only when a real `bundleRelease` needs exercising.
 
 ### The five mistakes to not make
 
@@ -142,25 +143,23 @@ design-canon/                 authoritative design language
   resource-map.md             font, icon, and resource provenance + licences
   dependency-denylist.md      barred coordinates, and what is permitted despite looking heavy
 
-projects/
-  Sudoku/                     the Android app — two flavours, one source tree (D25). THE project:
-                              everything below refers to it, and every command runs from it.
-    app/src/
-      main/java/…/            SHARED by every flavour. No game code may live here.
-        MainActivity.kt
-        core/                 GameDefinition contract
-        studio/               navigation, home, settings, persistence
-      gameSudoku/java/…/      sudoku(9) + the vendored GPL-3.0 QQWing engine.
-                              Compiled only by flavours that list it in srcDirs.
-      gameNonogram/java/…/    nonogram(10) — no vendored code, GPL-clean.
-      studio/java/…/          GameRegistry — every game, opens on the library
-      sudoku/java/…/          GameRegistry — one game, opens on the game
-      nonogram/java/…/        GameRegistry — one game, opens on the game
-      test/java/…/            unit tests, shared across flavours
-    design-system/src/main/java/…/
-      theme/                  design tokens — the ONLY place literals belong
-      components/             shared Nothing-styled Compose components
-      guard/                  debug-only composition guards
+projects/                     one Gradle build per project (D36/D37): every game app, plus two
+                              shared libraries. Each consumes design-system + shell as
+                              includeBuilds and binds the repo-root conformance gate into its
+                              own `check`.
+  sudoku-app/                 sudoku(9) + the vendored GPL-3.0 QQWing engine.
+  nonogram-app/               nonogram(10) — no vendored code, GPL-clean.
+  minesweeper-app/            minesweeper(10) — the studio's one live red (a detonation).
+  connect-app/                connect(7) — numberlink, construction-built boards.
+  wordsearch-app/             wordsearch(12) — the studio's only bundled data (a word pool).
+  blockpuzzle-app/            blockpuzzle(8) — endless placement, score-not-win.
+  akari-app/                  akari(10) — light-up, uniqueness-proving generator.
+  binairo-app/                binairo(10) — Takuzu, deduction-carved generator (D37).
+  shell/                      game-agnostic chrome: home/stats/settings/rules, nav, persistence.
+  design-system/              tokens generated from design-canon/tokens.json, theme, components.
+
+conformance/                  the repo-root gate build (D37): 33 rules over every project,
+                              wired into each project's `check`.
 
 specs/                        feature specs, plain markdown
 ```
@@ -179,7 +178,7 @@ Everything below is working code. `sudoku(9)` has been played on a device.
 |---|---|---|
 | `ideas/` | implemented | populated, status markers enforced by `X5-status-markers` |
 | `design-canon/` | implemented | `tokens.json` is the machine-readable source; canon drift is a build gate |
-| `projects/` | implemented | two modules, eight flavours (D25, D33) — studio, sudoku, nonogram, minesweeper, connect, wordsearch, blockpuzzle, akari |
+| `projects/` | implemented | composite layout (D36/D37): eight game apps + shared shell + design-system |
 | `specs/` | implemented | harness spec lives here |
 | `:design-system` | implemented | token generator, theme, value-class boundary, 19 tests |
 | `:design-system/theme` | implemented | colours, type, spacing, shape, motion, gated haptics. `Fonts.kt` is the one placeholder. |
@@ -197,39 +196,40 @@ Everything below is working code. `sudoku(9)` has been played on a device.
 | `app/studio/` | implemented | four destinations: home/start page, game, stats, settings. All seven settings (theme, haptics, remaining counts, timer, peer highlight, mistakes, third accent) persist and are honoured. |
 | `app/studio/persistence` stats | implemented | per game and difficulty: played, won, best time. Consumes `GameResult` (D26). |
 
-**Build order position: step 9 complete, plus the flavour split (D25).** `sudoku(9)` is playable,
-device-verified, and shippable as either a standalone app or part of the studio. The enforcement layer is a
-build gate at 36 rules. Remaining: Paparazzi goldens (step 10) and an AGP upgrade to get Android Lint back.
+**Build order position: step 9 complete, plus the composite split (D36/D37).** Eight games are
+implemented pre-launch; none has been device-playtested in its standalone app yet. The enforcement layer is
+the repo-root gate, wired into every project's `check`. Remaining: Paparazzi goldens (step 10),
+on-device playtesting per app, and an AGP upgrade to get Android Lint back.
 
 **Known gaps, stated plainly.**
 
-- **`applicationId` is `com.noadsstudio`** (studio) / `com.noadsstudio.sudoku` (standalone) — decision
-  D27, "No Ads Studio". Real and no longer a blocker for store identity. Still change it to a domain you
-  own before the first publish if you have one; it is permanent after that. The code `namespace` is still
+- **`applicationId`s are `com.noadsstudio.<game>`** — decision
+  D27, "No Ads Studio". Still change them to a domain you
+  own before the first publish if you have one; they are permanent after that. The code `namespace` is still
   `com.example.lightapp` — a compile-time-only id Play never sees, whose alignment is an optional refactor.
 - **Android Lint is off** (D24), so there is no automated accessibility or API-level checking.
 - **Every test is JVM.** No instrumented tests, no screenshot tests. Rotation and font-scale behaviour is
   verified by hand or not at all.
-- **`SessionStore` has per-game session methods** (`sudokuSession`, `saveSudokuSession`, …) on a class
-  shared by every flavour. It grows a method triple per game. The stats half of the same class is already
-  game-agnostic — keyed by game id, consuming whatever `GameResult` reports — so it is the shape the
-  session half should be refactored into: one key per game, each game owning its own codec.
+- ~~`SessionStore` has per-game session methods~~ **resolved by the composite split (D36)**: persistence
+  moved into the game-agnostic `shell`; each game app owns its session codec (`SudokuSessionStore`, …),
+  one key per game — the shape this gap asked for.
 - **Generation time on real hardware is unmeasured.** `Simple` and `Challenge` are the slowest to land.
   Attempts are bounded (8 tries plus a wall-clock timeout, with a silent `MODERATE` fallback), but wall
   time on the reference phone is still unknown.
 
-Run `./gradlew assembleDebug check` — 245 unit tests **and** `conformanceCheck`, which enforces **36 rules**:
+Each project's `./gradlew check` runs its own unit tests **and** the repo gate (`:conformance:check`),
+which enforces **33 rules**:
 
 - **14 source-pattern rules** — literals, forbidden Compose types, bare `MaterialTheme`, forbidden motion,
   dividers, elevation, proprietary fonts, ungated haptics, raw concurrency, `!!`, unbound dot grids,
   screens missing insets or scroll, and a fourth readout.
-- **22 structural rules** — harness directories, root markdown, agent symlinks, zero permissions in every
+- **19 structural rules** — harness directories, root markdown, agent symlinks, zero permissions in every
   source-set manifest *and* in every variant's merged manifest, `allowBackup="false"` in every manifest,
   no `package` attribute, no binary assets, the dependency denylist, canon/components agreement, token
-  drift in AGENTS.md and in the canon, document status markers, registry/roadmap agreement, one game in
-  progress, a referenced ProGuard file, a DataStore corruption handler, the suppression cap, GPL-licensed
-  vendored code staying out of the shared source set, no game code in the shared source set, per-flavour
-  admission agreement (game dir ↔ srcDirs ↔ registry), and a unique application id per shipped flavour.
+  drift in AGENTS.md and in the canon, document status markers, registry/roadmap agreement, a referenced
+  ProGuard file, a DataStore corruption handler, the suppression cap, GPL-licensed
+  vendored code staying out of the shared source set, no game code in the shell, and project admission
+  agreement (one `GameRegistry` per app, admitted in the roadmap).
 
 It fails the build on a violation, reporting the location, rule id and authority. **Every rule has been
 verified by injecting the violation it targets and confirming it fails** — not assumed. Ten of them exist
@@ -294,25 +294,19 @@ So show generator state, show why a cell conflicts, treat the timer as an instru
 
 ## Commands
 
-Run from `projects/Sudoku/`:
+Run from any `projects/<name>/` — each project is its own Gradle build (D36):
 
 ```bash
-./gradlew assembleDebug check       # ← the one to run. All flavours, then 36 rules + tests.
-./gradlew assembleSudokuDebug       # just the standalone sudoku(9) APK
-./gradlew assembleNonogramDebug     # just the standalone nonogram(10) APK
-./gradlew assembleStudioDebug       # just the multi-game studio APK
-./gradlew bundleSudokuRelease       # .aab for the standalone Play listing
-./gradlew bundleNonogramRelease     # .aab for the standalone Play listing
-./gradlew bundleStudioRelease       # .aab for the studio Play listing
+./gradlew check                     # ← the one to run. That project's tests + the 33-rule repo gate.
+./gradlew :conformance:conformanceCheck         # the gate alone (-Pconformance.fast=true for the fast loop)
+./gradlew :app:assembleDebug        # that project's debug APK
+./gradlew :app:bundleRelease        # unsigned .aab (add signing config before real use)
 ```
 
-**There are three apps from one source tree** — decision D25. `studio` ships the game library; `sudoku`
-ships `sudoku(9)` alone; `nonogram` ships `nonogram(10)` alone. Each standalone carries its own
-`applicationId` and store listing, so most task names carry a flavour: `assembleDebug` builds all of them,
-`assembleStudioDebug` builds one. Output lands in `app/build/outputs/apk/<flavour>/debug/`.
-
-Unit tests run once per variant, so the suite executes six times (studio/sudoku/nonogram × debug/release).
-That is inherent to flavours, not a misconfiguration.
+**One game, one project.** Each app under `projects/<game>-app` ships its own `applicationId`
+(`com.noadsstudio.<game>`) and store listing. Output lands in
+`projects/<game>-app/app/build/outputs/apk/debug/`. Changed a shared library? Check every consumer:
+`for p in projects/*-app; do (cd "$p" && ./gradlew check); done`.
 
 **Order matters, and only in one place.** `R4-merged-permissions` reads the *merged* manifest to prove the
 installed APK grants nothing — the realistic way the offline promise breaks is a dependency merging a
@@ -322,10 +316,9 @@ refusing to vouch for something it cannot see, which is correct. Put `assembleDe
 
 `./gradlew lint` is disabled on this toolchain — AGP 8.5.2's Lint cannot run on JDK 25 (decision D24). It is
 not a passing check, it is an absent one. Losing it costs the accessibility and API-level checks, so those
-are review obligations until AGP is upgraded.The suite is 245 tests: 226 in `:app` per studio variant (the shared set plus all five games' own sets
-in `src/test<Flavour>`, all attached to studio with zero duplication — game rules, generators, hints,
-restore validation, the codecs, the picker state machines, stats recording) and 19 in `:design-system`
-(token properties, font coverage). Each standalone variant runs the shared set plus its own game's. Add tests with logic; a
+are review obligations until AGP is upgraded.Every project runs its own suite: each game app carries its game's rules/generator/hint/codec tests
+plus the shell's shared persistence tests, and `shell` + `design-system` carry their own (token
+properties, font coverage). Add tests with logic; a
 pure-function file with no test is the cheapest thing in this repo to get wrong.
 
 ---
@@ -335,7 +328,7 @@ pure-function file with no test is the cheapest thing in this repo to get wrong.
 Everything needed is already decided and specified. Do not ask scoping questions — read these three
 and build:
 
-1. **`ideas/decisions.md`** — 16 resolved decisions plus the 9-step build order. Nothing is open.
+1. **`ideas/decisions.md`** — every resolved decision (D1–D37) plus the build order. Nothing is open.
 2. **`design-canon/architecture.md`** — the exact file tree for both modules, what belongs in each
    file, the moves required from the current state, and the ownership ladder for anything new.
 3. **`design-canon/component-specs.md`** — exact token names, every component, every screen layout
@@ -353,14 +346,16 @@ covers the eight translation decisions — the name, the one quantity, the three
 colour, what the dots encode, where red is allowed, which input verb to reuse, and the paper review —
 that all have to be answered before `component-specs.md` has anything to say about your screen.
 
-Key decisions you would otherwise waste a prompt asking about: two Gradle modules (`:design-system`,
-`:app`), tokens generated from `design-canon/tokens.json`, DataStore not Room, hand-rolled navigation
+Key decisions you would otherwise waste a prompt asking about: one Gradle build per game app + two
+shared libraries (`projects/design-system`, `projects/shell`) — D36, tokens generated from
+`design-canon/tokens.json`, DataStore not Room, hand-rolled navigation
 not Navigation-Compose, Geist + Doto fonts, haptics as the feedback channel, games named `sudoku(9)`.
 
 ## Conventions
 
 - Kotlin + Compose only. Material3 as the substrate, but always wrapped in the project theme.
 - Never call `setContent { MaterialTheme { … } }`. Use the project theme wrapper.
-- Adding a game is: a `GameDefinition`, a ViewModel, a Screen, and one line in `GameRegistry`.
+- Adding a game is: a `GameDefinition`, a ViewModel, a Screen, a `GameRegistry`, and an admitted project
+  under `projects/` (D36) — see `design-canon/game-scaffold.md`.
 - Design values go in `theme/`. If a screen needs a value that has no token, add the token.
 - The vendored QQWing engine is GPL-3.0. Keep its license obligation in mind before publishing.

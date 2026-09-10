@@ -5,11 +5,12 @@ package com.example.lightapp.studio.persistence
  *
  * The board travels as 100 characters, one per cell: `0` ground, `1` blank wall,
  * `2` bulb, `3`–`7` numbered walls demanding 0–4 bulbs. Beside it, [walls] carries
- * the puzzle's blank-wall layout as 100 characters of `0`/`1` — redundant with the
- * board for every position a bulb could occupy, but *not* derivable from it: clues
- * are the only walls the board names explicitly, and a board whose blank walls have
- * moved is a puzzle that never shipped. Nonogram set the precedent of carrying
- * derived structure so restore can verify rather than guess.
+ * the puzzle's wall layout as 100 characters of `0`/`1` — every wall kind, blank and
+ * numbered alike. It is redundant with the board in honest play (walls never mutate),
+ * which is the point: restore reads it as the layout's authority cell by cell, so a
+ * save whose board has drifted from its mask is a puzzle that never shipped, not a
+ * variant. Nonogram set the precedent of carrying derived structure so restore can
+ * verify rather than guess.
  *
  * Standalone build: no `GameSession` interface — the shell's `GameSessionSnapshot`
  * carries the resume card, and [AkariSessionStore] builds it from these fields.
@@ -17,7 +18,7 @@ package com.example.lightapp.studio.persistence
 data class AkariSession(
     /** 100 characters of `0`–`7`, the board as played. */
     val cells: String,
-    /** 100 characters of `0`/`1` — the blank walls under the clues. */
+    /** 100 characters of `0`/`1` — every wall (blank and numbered) of the puzzle. */
     val walls: String,
     val difficulty: String,
     val elapsedMs: Long,
@@ -60,9 +61,11 @@ object AkariCodec {
         return out
     }
 
-    /** The blank-wall mask of [cells]: 1 where the cell is a blank wall. */
+    /** The wall mask of [cells]: 1 where the cell is any wall — blank or numbered
+     *  (clues). Restore verifies board against mask cell by cell, so the mask must
+     *  carry every wall kind the generator produces, not just the blank ones. */
     fun encodeWalls(cells: List<Int>): String =
-        cells.joinToString("") { cell -> if (cell == 1) "1" else "0" }
+        cells.joinToString("") { cell -> if (cell in 1..7 && cell != 2) "1" else "0" }
 
     fun decodeWalls(encoded: String?): List<Boolean>? {
         if (encoded == null || encoded.length != AkariSession.CELLS) return null

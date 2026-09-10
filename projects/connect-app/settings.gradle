@@ -28,3 +28,4 @@ include ':app'
 // Composite builds: the design system and the shared shell.
 includeBuild('../design-system')
 includeBuild('../shell')
+includeBuild('../../conformance')  // D37: the repo-root conformance gate.

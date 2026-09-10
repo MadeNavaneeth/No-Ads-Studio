@@ -29,7 +29,8 @@ wasted effort. Read the `R` list before you start and again before you finish.
 > A false `A` is a rule everyone assumes the build is handling, which is strictly worse than no marker at
 > all. If you add a rule here, marking it `A` obliges you to add the gate in the same change.
 
-Count today: **36 automated conformance rules** (`projects/Sudoku/conformance.gradle`) plus **16 token
+Count today: **33 automated conformance rules** (`conformance/build.gradle`, the repo-root gate —
+D37) plus **16 token
 property tests** and **3 font coverage tests** (`:design-system:test`). Every automated rule in this index
 maps to one of those and has been verified to fail when the rule is broken, rather than assumed to work.
 

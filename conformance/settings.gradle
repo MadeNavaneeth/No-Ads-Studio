@@ -1,0 +1,5 @@
+// D37: the conformance checker lives in its own build so every project under
+// projects/ can include it as a composite (`includeBuild('../../conformance')`)
+// and bind the gate to its own `check`. It applies no plugins and compiles no
+// sources; it is pure verification.
+rootProject.name = 'conformance'

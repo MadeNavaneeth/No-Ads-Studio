@@ -1,4 +1,0 @@
-// Root build. Plugin versions live in settings.gradle.
-
-// The conformance checker — decision D23. Bound to `check` inside the script.
-apply from: 'conformance.gradle'

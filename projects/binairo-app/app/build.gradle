@@ -1,7 +1,7 @@
-// D35: standalone minesweeper(9) app — app module.
+// D37: standalone binairo(10) app — app module.
 //
 // Depends on the shared shell (chrome) and design-system (design language) via
-// composite builds. This module provides only the nonogram game code, its session
+// composite builds. This module provides only the binairo game code, its session
 // persistence, and the app entry point.
 plugins {
     id 'com.android.application'
@@ -58,3 +58,10 @@ dependencies {
 
     testImplementation 'junit:junit:4.13.2'
 }
+
+// The conformance checker is a build gate, not an optional step — decisions D23 and D37.
+tasks.named('check') { dependsOn gradle.includedBuild('conformance').task(':conformanceCheck') }
+
+// Lint disable must live in the module script: :app tasks are not visible from the
+// root project of this build. Same JDK 25 reason (D22/D24).
+tasks.matching { it.name.startsWith('lint') }.configureEach { enabled = false }

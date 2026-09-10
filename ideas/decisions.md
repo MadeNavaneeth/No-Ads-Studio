@@ -456,15 +456,15 @@ for store identity. The namespace alignment is now the only cosmetic id left, an
 
 ## D28 — A local emulator for device checks, not repeated manual APK installs
 
-**Decided:** `scripts/emu-*.sh` in `projects/Sudoku/` manage a single lightweight AVD named
+**Decided:** `scripts/emu-*.sh` manage a single lightweight AVD named
 `nas-fast` for on-machine device verification, replacing "build an APK, install it somewhere,
-look at it" with one command.
+look at it" with one command. (**Amended by D37:** the scripts moved to the repo root.)
 
 ```bash
-projects/Sudoku/scripts/emu-start.sh              # boot it (~45-75s cold, seconds after)
-projects/Sudoku/scripts/run-on-emu.sh sudoku      # build, install, launch, screenshot
-projects/Sudoku/scripts/emu-screenshot.sh          # screenshot on demand
-projects/Sudoku/scripts/emu-stop.sh                # stop it (saves a snapshot)
+scripts/emu-start.sh              # boot it (~45-75s cold, seconds after)
+scripts/run-on-emu.sh sudoku      # build, install, launch, screenshot
+scripts/emu-screenshot.sh          # screenshot on demand
+scripts/emu-stop.sh                # stop it (saves a snapshot)
 ```
 
 **Image: `google_apis` API 34 x86_64, not `aosp_atd`.** The `android-35;aosp_atd;x86_64` image
@@ -700,29 +700,7 @@ contract and its tests. The game itself is unbuilt — Tier 3, behind nothing; i
 work item or wait. The admission criteria's other rows (offline, zero permissions, no assets,
 2–10 min sessions) pass by inspection the same way Nonogram's did.
 
-## Build order
-
-Strictly sequential. Each step leaves the project compiling.
-
-0. **Prerequisite, manual:** place `geist_sans`, `geist_mono`, and variable `doto` in
-   `design-system/src/main/res/font/`. Remove `ndot55`, `ndot57`, `ntype82`, `ntype82mono`. Nothing in
-   steps 2 onward can compile without this. Set `minSdk 26` per D19.
-1. `tokens.json` generator task + `TokenValidationTest` (D16) + `:design-system` module skeleton.
-   Validation must exist before any token is consumed.
-2. Theme: `Spacing`/`Radius`/`Duration` value classes, colours, type (Geist/Doto, em tracking, tabular
-   figures), shape, motion
-3. Components: `Label`, `NothingButton`, `NothingCard`, `NothingTopBar`, `GameIcon`, `DotMatrixReadout`,
-   `GridCell`, `NumberPad`, `DifficultyPicker`
-4. Studio shell: hand-rolled nav, home screen from `GameRegistry`, settings screen
-5. Persistence: DataStore, the D7 encoding, `settings.` prefix keys
-6. `sudoku(9)`: ViewModel, QQWing off the main thread, grid UI, conflict logic (D20), undo (D17),
-   difficulty picker (D18), haptics
-7. Delete `NothingSudokuScreen` from `MainActivity.kt`
-8. Debug composition guards, detekt forbidden-type rule, Konsist architecture test — all bound to `check`
-9. `conformanceCheck` Gradle task: harness structure, denylist, anti-requirements, doc/code agreement
-10. Paparazzi component spec sheet + goldens, then the four review tests in `nothing-study.md` §12
-
-## D32 — The harness hardens itself: four gates the flavour split left open
+## D35 — The harness hardens itself: four gates the flavour split left open
 
 **2026-09-06.** Building a second game made the goal explicit — many small, offline, monochrome games,
 each individually installable — and auditing the enforcement layer against that goal found four gaps a
@@ -772,3 +750,67 @@ recomposition behaviour, rendered output, and launch time. The vetted replacemen
 against the 1-second budget. All build/test-time only; nothing lands in the artifact, so the
 zero-permission product promise is untouched. Adoption is tiered and deferred until a gate actually
 fails for the first time — a tool adopted before it has a failure to catch is decoration.
+
+## D36 — One project per game: the composite build split
+
+**2026-09-08.** The flavour architecture (D25) was replaced by per-game standalone projects. Each
+game lives in `projects/<game>-app` with its own manifest, application id, and Gradle wrapper; the
+game-agnostic chrome moved to `projects/shell` and the design language to `projects/design-system`,
+each consumed by every game through Gradle composite builds (`includeBuild`) — one source tree per
+library, no published artifacts, no copied tokens.
+
+**Why:** the original flavour rationale — a design fix stays one commit — is preserved by the
+composite libraries, which are strictly better at it: the shell and the design system gained their
+own tests and compile without an app. What flavours could not fix: the session store grew a method
+triple per game on a class every flavour compiled (the known gap AGENTS.md carried), and the GPL
+engine needed source-set gymnastics to keep its obligation scoped. Under the composite layout a
+game's codec, session store, and tests live in its own project, and the GPL obligation lands only
+on `sudoku-app`.
+
+**Cost:** two architectures existed side by side and this decision went unrecorded — the build
+files cited "D35" before any such decision existed, which collided with the harness-hardening
+entry above. Renumbered accordingly; the monorepo's retirement is D37.
+
+## D37 — One architecture, one gate: the monorepo retires
+
+**2026-09-09.** Nothing is shipped, so the dual-architecture state resolves to the composite
+layout alone. `projects/Sudoku` — the original two-module, nine-flavour build — is retired. Its
+sources were verified identical to (or older than) the composite tree's before deletion; the one
+test the new tree lacked (`SudokuCodecTest`) was ported to `sudoku-app` first; the emulator
+scripts moved to the root `scripts/`. The 36-rule conformance gate moves out of the retired tree:
+the checker lives at the repo root (`conformance/build.gradle`) and runs over every project's
+sources, wired into each project's `check` so the gate stays a build gate rather than a step
+someone remembers to run.
+
+**Why:** two source trees for the same code is exactly the drift the canon exists to prevent,
+and the old tree was already unbuildable — D36 removed its `design-system` module without
+updating its settings. A pre-change snapshot commit preserves the monorepo in history; every
+line of verifiable content it held is represented in the composite tree.
+
+**Cost:** one working build layout to maintain instead of two. The conformance gate's
+flavour-era rules (M5-flavour-agreement, M5-standalone-identity, G2-pure-main, R4-gpl-isolation)
+are rewritten for the composite layout: a game exists when its project exists, its own
+`GameRegistry` registers its Definition, and the roadmap lists it — the same admission chain,
+one project at a time.
+
+## Build order
+
+Strictly sequential. Each step leaves the project compiling.
+
+0. **Prerequisite, manual:** place `geist_sans`, `geist_mono`, and variable `doto` in
+   `design-system/src/main/res/font/`. Remove `ndot55`, `ndot57`, `ntype82`, `ntype82mono`. Nothing in
+   steps 2 onward can compile without this. Set `minSdk 26` per D19.
+1. `tokens.json` generator task + `TokenValidationTest` (D16) + `:design-system` module skeleton.
+   Validation must exist before any token is consumed.
+2. Theme: `Spacing`/`Radius`/`Duration` value classes, colours, type (Geist/Doto, em tracking, tabular
+   figures), shape, motion
+3. Components: `Label`, `NothingButton`, `NothingCard`, `NothingTopBar`, `GameIcon`, `DotMatrixReadout`,
+   `GridCell`, `NumberPad`, `DifficultyPicker`
+4. Studio shell: hand-rolled nav, home screen from `GameRegistry`, settings screen
+5. Persistence: DataStore, the D7 encoding, `settings.` prefix keys
+6. `sudoku(9)`: ViewModel, QQWing off the main thread, grid UI, conflict logic (D20), undo (D17),
+   difficulty picker (D18), haptics
+7. Delete `NothingSudokuScreen` from `MainActivity.kt`
+8. Debug composition guards, detekt forbidden-type rule, Konsist architecture test — all bound to `check`
+9. `conformanceCheck` Gradle task: harness structure, denylist, anti-requirements, doc/code agreement
+10. Paparazzi component spec sheet + goldens, then the four review tests in `nothing-study.md` §12

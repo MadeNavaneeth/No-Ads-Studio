@@ -50,6 +50,12 @@ object AkariGenerator {
     /** Attempts before the generator admits defeat — the caller regenerates or fails. */
     private const val MAX_ATTEMPTS = 60
 
+    /** DFS nodes before [countSolutions] gives up and reports "not proven unique".
+     *  The exact count on a loosely-clued board can be exponential; the generator
+     *  only ever needs the yes/no answer, and every board it ships proves well
+     *  within this budget. */
+    private const val NODE_BUDGET = 200_000
+
     /**
      * A board: [AkariRules.SIZE]² cells of [AkariRules.EMPTY], [AkariRules.WALL] and
      * [AkariRules.CLUE_0]..[AkariRules.CLUE_4]. No bulbs — the start state is dark.
@@ -220,6 +226,9 @@ object AkariGenerator {
      *
      * Clue *exactness* (a numbered wall touching too few bulbs) is checked only at
      * the leaves — during the descent, under-count is not yet a contradiction.
+     * A node budget bounds the search: when it fires the function returns `cap` —
+     * *not proven unique*, exactly what the generator must treat it as — so no
+     * input, however open, can stall generation.
      * Exposed because the generator's load-bearing guarantee is asserted, not
      * assumed (roadmap §3): the tests call this directly on generated boards.
      */
@@ -234,6 +243,7 @@ object AkariGenerator {
 
         val bulbs = BooleanArray(AkariRules.CELLS)
         var count = 0
+        var nodes = 0
 
         fun litNow(i: Int) = lighters[i].any { bulbs[it] }
 
@@ -278,6 +288,10 @@ object AkariGenerator {
         }
 
         fun dfs(p: Int) {
+            if (++nodes > NODE_BUDGET) {
+                count = cap
+                return
+            }
             if (count >= cap) return
             if (p == white.size) {
                 if (white.all { litNow(it) } && clueExact()) count++

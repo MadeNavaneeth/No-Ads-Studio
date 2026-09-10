@@ -51,16 +51,17 @@ and none of the `REFUSE` rows. Rule of thumb: **everything the market leader
 has, except anything needing network, server, account, ad, or calendar —
 those ship as their offline substitute or not at all.**
 
-## 5. Build loop (from `projects/Sudoku/`)
+## 5. Build loop (from `projects/<game>-app/`)
 
 ```bash
-./gradlew conformanceCheck -Pconformance.fast=true   # inner loop, seconds
-./gradlew assembleDebug check                        # the gate, ~36 rules + 175 tests
-scripts/run-on-emu.sh <flavour>                      # device proof when UI changed
+./gradlew :conformance:conformanceCheck -Pconformance.fast=true   # inner loop, seconds
+./gradlew check                                        # the gate + this project's tests
+scripts/run-on-emu.sh <game>                           # device proof when UI changed
 ```
 
 - Every conformance failure prints a `FIX:` line — do what it says, re-run, do not open the authority doc.
-- A change is not done until **both** APKs are current (`assembleDebug` builds studio + sudoku together).
+- Changed a shared library (`design-system`, `shell`)? Check every consumer:
+  `for p in projects/*-app; do (cd "$p" && ./gradlew check); done`.
 - Order matters on a clean tree: `assembleDebug` before `check` (R4 reads the merged manifest).
 
 ## 6. Done gate

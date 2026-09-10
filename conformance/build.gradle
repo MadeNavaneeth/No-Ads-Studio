@@ -1,0 +1,688 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONFORMANCE CHECKER — repo-root edition (D37)
+//
+// The static half of the enforcement ladder, applied to the composite layout:
+// every project under projects/ — one app per game, the shared shell, and the
+// design system — is checked from here, and each project's `check` depends on
+// this task. A rule violation anywhere fails the build of the project that
+// includes this build. Deliberately zero-dependency — decision D23.
+//
+// Path anchors: every rule resolves paths from THIS build's rootProject, which
+// is conformance/, two levels under the repo root. Repo-level locations
+// (design-canon/, ideas/, projects/) are reached through workspaceFile();
+// project sources through projects/<name>/.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+def SUPPRESSION = '@DesignSuppression'
+
+/** Requirement 15 criterion 15. Ten is enough to be pragmatic and few enough to audit. */
+def SUPPRESSION_CAP = 10
+
+/**
+ * One rule: a name, the files it applies to, a pattern, why it exists, and — the part that
+ * matters most for a small model — the literal remedy.
+ */
+class ConformanceRule {
+    String id
+    String description
+    String authority
+    List<File> roots
+    String pattern
+    String fix = ''
+    Closure<Boolean> exempt = { File f, String line -> false }
+}
+
+def ktFiles = { File root ->
+    if (!root.exists()) return []
+    def out = []
+    root.eachFileRecurse { f -> if (f.name.endsWith('.kt')) out << f }
+    return out
+}
+
+/** A file's text with comments removed. */
+def codeText = { File f ->
+    f.readLines()
+            .collect { it.replaceAll(/\/\/.*$/, '').replaceAll(/^\s*\*.*$/, '') }
+            .join('\n')
+}
+
+// ── the projects this gate covers ────────────────────────────────────────────
+// Discovered, not enumerated: a new game project is covered by no edit here,
+// the same way the flavour-era checker covered new flavours.
+//
+// The repo root is derived from THIS script's location (conformance/ sits directly
+// under it) rather than from rootProject.file('../..'), whose resolution differs
+// between a standalone invocation and a composite one.
+def wsRoot = buildscript.sourceFile.parentFile.parentFile
+def workspaceFile = { String rel -> new File(wsRoot, rel) }
+def projectsDir = workspaceFile('projects')
+
+def appProjects = (projectsDir.listFiles() ?: [] as File[]).findAll {
+    it.isDirectory() && it.name.endsWith('-app')
+}.sort { it.name }
+
+def shellProject = new File(projectsDir, 'shell')
+def designSystemProject = new File(projectsDir, 'design-system')
+
+def appSourcesOf = { File project ->
+    // The consumer source set: app/src/main/java. Test sources are excluded —
+    // they are never shipped, and the flavour-era gate never read them either.
+    def main = new File(project, 'app/src/main/java')
+    return main.exists() ? [main] : []
+}
+
+tasks.register('conformanceCheck') {
+    group = 'verification'
+    description = 'Verifies the design-system rules that can be checked statically, across every project'
+
+    doLast {
+        def fast = project.hasProperty('conformance.fast')
+
+        // ── consumer sources: app code + shell, never the design system ──────
+        def consumerSources = []
+        appProjects.each { p -> consumerSources += appSourcesOf(p) }
+        consumerSources << new File(shellProject, 'src/main/java')
+        consumerSources = consumerSources.findAll { it.exists() }.sort { it.path }
+
+        def dsMain = new File(designSystemProject, 'src/main/java')
+        def dsComponents = new File(dsMain, 'com/example/lightapp/designsystem/components')
+        def dsTheme = new File(dsMain, 'com/example/lightapp/designsystem/theme')
+
+        def rules = [
+                new ConformanceRule(
+                        id: 'R15-literals-consumer',
+                        description: 'No colour, dp, or sp literal in a consumer module',
+                        authority: 'Requirement 15 criteria 3 and 10',
+                        roots: consumerSources,
+                        pattern: /(\b\d+(\.\d+)?\.dp\b|\b\d+(\.\d+)?\.sp\b|Color\(0x)/,
+                        fix: 'Replace the literal with a token. A dp value becomes a NothingSpacing ' +
+                                'step (16.dp -> NothingSpacing.md, applied via Modifier.pad/sizeOf); a ' +
+                                'colour becomes a TextRole/SurfaceRole/BorderRole. Sizes: 4=xs 8=sm ' +
+                                '16=md 24=lg 32=xl 48=xxl 64=xxxl 96=hero. See design-canon/nothing-tokens.md.',
+                ),
+                new ConformanceRule(
+                        id: 'R15-forbidden-types',
+                        description: 'A consumer module may not import Color, Dp, or TextUnit',
+                        authority: 'Requirement 15 criteria 2 and 3',
+                        roots: consumerSources,
+                        pattern: /^import androidx\.compose\.ui\.(graphics\.Color|unit\.Dp|unit\.TextUnit)$/,
+                        fix: 'Delete this import. Name a role instead of the raw type: TextRole for text ' +
+                                'colour, SurfaceRole for backgrounds, a NothingSpacing step for a Dp. If ' +
+                                'you truly need a packed colour int (e.g. system bars), use a plain Int ' +
+                                'constant as MainActivity does.',
+                ),
+                new ConformanceRule(
+                        id: 'R15-literals-components',
+                        description: 'No colour, dp, or sp literal outside the theme package',
+                        authority: 'Requirement 15 criteria 9 to 11',
+                        roots: [dsComponents],
+                        pattern: /(\b\d+(\.\d+)?\.dp\b|\b\d+(\.\d+)?\.sp\b|Color\(0x)/,
+                        fix: 'A component reads values from NothingTheme/NothingSpacing, never as ' +
+                                'literals. If a needed value has no token, add the token to ' +
+                                'design-canon/tokens.json first — do not inline it here.',
+                ),
+                new ConformanceRule(
+                        id: 'R8-bare-material-theme',
+                        description: 'MaterialTheme may only be called from the theme package',
+                        authority: 'Requirement 8 criterion 6',
+                        roots: consumerSources + [dsComponents],
+                        pattern: /MaterialTheme\s*\(/,
+                        fix: 'Wrap content in NothingTheme { }, not MaterialTheme { }. NothingTheme.kt is ' +
+                                'the one place MaterialTheme may be called; it populates Material from our tokens.',
+                ),
+                new ConformanceRule(
+                        id: 'R13-forbidden-motion',
+                        description: 'No spring, bounce, overshoot, or position/scale animation',
+                        authority: 'Requirement 13 criteria 3 and 4',
+                        roots: consumerSources + [dsMain],
+                        pattern: /(\bspring\s*\(|Overshoot|Bounce|animateDpAsState|\.graphicsLayer\s*\{)/,
+                        fix: 'Animate opacity or colour only. Use animateColorAsState/animateFloatAsState ' +
+                                'with NothingMotion.microSpec() or transitionSpec(); never animate position, ' +
+                                'size, or scale, and never a spring. For screen changes use Crossfade.',
+                ),
+                new ConformanceRule(
+                        id: 'R11-no-dividers',
+                        description: 'Groups are separated by spacing, never by a divider line',
+                        authority: 'Requirement 11 criterion 8',
+                        roots: consumerSources + [dsMain],
+                        pattern: /\b(Divider|HorizontalDivider|VerticalDivider)\s*\(/,
+                        fix: 'Delete the divider. Separate the groups with NothingSpacing.xl (32dp) or ' +
+                                'larger via NothingArrangement.spacedBy or a pad() — space replaces the line.',
+                ),
+                new ConformanceRule(
+                        id: 'R8-no-elevation',
+                        description: 'Elevation is surface colour only — no shadow, blur, or gradient',
+                        authority: 'Requirement 8 criteria 3 and 4',
+                        roots: consumerSources + [dsMain],
+                        pattern: /(\.shadow\s*\(|\.blur\s*\(|Brush\.(linear|radial|vertical|horizontal)Gradient)/,
+                        fix: 'Remove the shadow/blur/gradient. Show elevation by moving up a surface ' +
+                                'role instead: SurfaceRole.Surface -> SurfaceRaised. Flat fills only.',
+                ),
+                new ConformanceRule(
+                        id: 'R9-proprietary-fonts',
+                        description: 'Nothing\'s proprietary faces must never be referenced',
+                        authority: 'Requirement 9 criterion 3, decision D11',
+                        roots: consumerSources + [dsMain],
+                        pattern: /(ndot5[57]|ntype82)/,
+                        fix: 'Never reference NDot or NType — they are not openly licensed. Use the three ' +
+                                'font roles (display/sans/mono) resolved in Fonts.kt.',
+                ),
+                new ConformanceRule(
+                        id: 'D15-gated-haptics',
+                        description: 'Haptics go through the gated channel, never the platform API',
+                        authority: 'Decision D15',
+                        roots: consumerSources + [dsComponents],
+                        pattern: /LocalHapticFeedback/,
+                        fix: 'Replace with val haptics = rememberNothingHaptics(), then ' +
+                                'haptics.perform(HapticEvent.Tick / Conflict / Complete). Only Haptics.kt ' +
+                                'in the theme package may touch LocalHapticFeedback, so the off switch works.',
+                ),
+                new ConformanceRule(
+                        id: 'R16-no-raw-concurrency',
+                        description: 'Concurrency is structured — no raw threads, GlobalScope, or runBlocking',
+                        authority: 'Requirement 16 criterion 3',
+                        roots: consumerSources,
+                        // The vendored generator is exempt because it *is* raw threads; it
+                        // lives in sudoku-app's own core/ package under the composite layout.
+                        pattern: /(\bThread\s*\(|\bGlobalScope\b|\brunBlocking\s*\()/,
+                        exempt: { File f, String line -> f.path.contains('/sudoku/core/') },
+                ),
+                new ConformanceRule(
+                        id: 'R16-no-unsafe-unwrap',
+                        description: 'No non-null assertion outside vendored code',
+                        authority: 'Requirement 16',
+                        roots: consumerSources,
+                        pattern: /!!/,
+                        fix: 'Replace !! with a safe form: `?: return`, `?.let { }`, or ' +
+                                'requireNotNull(x) { "why" } if it genuinely cannot be null. !! ships a ' +
+                                'crash to the device instead of failing on your machine.',
+                        exempt: { File f, String line -> f.path.contains('/sudoku/core/') },
+                ),
+                new ConformanceRule(
+                        id: 'G1-dots-carry-information',
+                        description: 'A dot matrix must be bound to a quantity, never a constant',
+                        authority: 'Requirement 12, decision D12, nothing-study.md §3',
+                        roots: consumerSources,
+                        pattern: /progress\s*=\s*[01](\.0+)?f\s*[,)]/,
+                        fix: 'Bind progress to a real 0..1 quantity, e.g. state.completion. A constant ' +
+                                'makes the dot matrix decoration, which G1 forbids. A `... ?: 0f` fallback ' +
+                                'for an absent state is fine and does not trip this.',
+                ),
+                new ConformanceRule(
+                        id: 'R16-screen-fits-the-window',
+                        description: 'Every screen handles window insets and can scroll',
+                        authority: 'Requirement 16, targetSdk 35 edge-to-edge enforcement',
+                        roots: consumerSources,
+                        // Inverted: fires on a *Screen.kt MISSING insets or scroll.
+                        pattern: /^@Composable$/,
+                        exempt: { File f, String line ->
+                            if (!f.name.endsWith('Screen.kt')) return true
+                            def code = codeText(f)
+                            code.contains('windowInsetsPadding(') && code.contains('verticalScroll(')
+                        },
+                        fix: 'Add both to the screen root Column: ' +
+                                '.windowInsetsPadding(WindowInsets.safeDrawing) so content clears the ' +
+                                'system bars, and .verticalScroll(rememberScrollState()) so it fits a ' +
+                                'short screen. Copy the pattern from game-scaffold.md section 4.',
+                ),
+                new ConformanceRule(
+                        id: 'D13-three-readouts',
+                        description: 'At most three readouts on a game screen',
+                        authority: 'Decision D13, nothing-study.md §11',
+                        roots: consumerSources,
+                        pattern: /^@Composable$/,
+                        exempt: { File f, String line ->
+                            (codeText(f) =~ /\bReadout\s*\(\s*"/).count <= 3
+                        },
+                        fix: 'A game screen shows exactly three readouts (D13). Remove one Readout("...") ' +
+                                'call. If this is not a game screen, name its helper something other than ' +
+                                'Readout — StatsScreen uses StatLine for the same reason.',
+                ),
+        ]
+
+        // ── structural checks: the harness and the anti-requirements ──────────
+        def structural = []
+        def canon = workspaceFile('design-canon')
+
+        def note = { String id, String detail, String authority ->
+            structural << [id: id, detail: detail, authority: authority]
+        }
+
+        // R1: the four harness directories, and root markdown limited to three names.
+        ['ideas', 'design-canon', 'projects', 'specs'].each { dir ->
+            if (!workspaceFile(dir).isDirectory()) {
+                note('R1-harness-dirs', "missing harness directory: $dir", 'Requirement 1 criterion 1')
+            }
+        }
+        wsRoot.listFiles()?.each { f ->
+            if (f.isFile() && f.name.endsWith('.md') &&
+                    !(f.name in ['README.md', 'AGENTS.md', 'CLAUDE.md'])) {
+                note('R1-root-markdown', "unexpected root markdown: ${f.name}",
+                        'Requirement 1 criteria 2 and 9')
+            }
+        }
+
+        // R17: agent adapters must be symlinks to AGENTS.md, never copies.
+        ['CLAUDE.md', '.github/copilot-instructions.md'].each { rel ->
+            def link = workspaceFile(rel)
+            if (!link.exists()) {
+                note('R17-adapter-links', "missing agent adapter: $rel",
+                        'Requirement 17 criterion 4')
+            } else if (!java.nio.file.Files.isSymbolicLink(link.toPath())) {
+                note('R17-adapter-links', "$rel is a regular file, must be a symlink",
+                        'Requirement 17 criteria 4 and 5')
+            }
+        }
+
+        // R4: zero permissions, no deprecated package attribute, allowBackup=false.
+        // Every manifest of every project, not just src/main.
+        def allProjects = appProjects + [shellProject, designSystemProject]
+        allProjects.each { project ->
+            ['src', 'app/src'].each { rel ->
+                def srcRoot = new File(project, rel)
+                if (!srcRoot.exists()) return
+                def manifests = []
+                srcRoot.eachFileRecurse { f ->
+                    if (f.isFile() && f.name == 'AndroidManifest.xml') manifests << f
+                }
+                manifests.each { manifest ->
+                    def relPath = wsRoot.toPath().relativize(manifest.toPath()).toString()
+                            .replace(File.separator, '/')
+                    def text = manifest.text
+                    (text =~ /uses-permission[^>]*android:name="([^"]+)"/).each { m ->
+                        note('R4-zero-permissions', "$relPath declares permission ${m[1]}",
+                                'Requirement 4 criterion 2')
+                    }
+                    if (text =~ /<manifest[^>]*\spackage\s*=/) {
+                        note('R4-no-package-attr', "$relPath uses the deprecated package attribute",
+                                'Requirement 4 criterion 6')
+                    }
+                    if (text =~ /<application\b/ && !(text =~ /android:allowBackup\s*=\s*"false"/)) {
+                        note('R4-allow-backup',
+                                "$relPath does not pin android:allowBackup=\"false\" " +
+                                        '(absent defaults to true)',
+                                'Requirement 4 criterion 2')
+                    }
+                }
+            }
+        }
+
+        // R4: no merged manifest may grant a permission. Each app project's own
+        // build output is scanned; fast mode skips this (it needs an assemble first).
+        def permissionAllowlist = [~/.*\.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION$/]
+        appProjects.each { project ->
+            def merged = []
+            def buildDir = new File(project, 'app/build')
+            if (buildDir.exists()) {
+                buildDir.eachFileRecurse { f ->
+                    def n = f.name
+                    if (f.isFile() && n == 'AndroidManifest.xml' &&
+                            (f.path.contains('merged_manifest') || f.path.contains('/manifest'))) {
+                        merged << f
+                    }
+                }
+            }
+            if (merged.isEmpty()) {
+                if (fast) return
+                note('R4-merged-permissions',
+                        "no merged manifest found for ${project.name} — run its assembleDebug first, " +
+                                'this check cannot vouch for the installed permission set',
+                        'Requirement 4 criterion 2')
+                return
+            }
+            merged.each { manifest ->
+                (manifest.text =~ /uses-permission[^>]*android:name="([^"]+)"/).each { m ->
+                    def name = m[1]
+                    if (permissionAllowlist.any { name ==~ it }) return
+                    note('R4-merged-permissions',
+                            "merged manifest of ${project.name} grants $name",
+                            'Requirement 4 criterion 2')
+                }
+            }
+        }
+
+        // R4: no raster image or audio payload, in any res/ or assets/ of any project.
+        def binaryExt = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'heic', 'heif', 'tif',
+                         'tiff', 'ico', 'psd', 'mp3', 'wav', 'ogg', 'oga', 'm4a', 'aac',
+                         'flac', 'opus', 'mid', 'midi', 'wma', '3gp']
+        allProjects.each { project ->
+            ['src', 'app/src'].each { rel ->
+                def srcRoot = new File(project, rel)
+                if (!srcRoot.exists()) return
+                srcRoot.eachFileRecurse { f ->
+                    if (!f.isFile()) return
+                    def relPath = wsRoot.toPath().relativize(f.toPath()).toString()
+                            .replace(File.separator, '/')
+                    if (!(relPath =~ /\/(res|assets)\//)) return
+                    def ext = f.name.tokenize('.').last().toLowerCase()
+                    if (ext in binaryExt) {
+                        note('R4-no-binary-assets', "$relPath ($ext)",
+                                'Requirement 4 criteria 4 and 13')
+                    }
+                }
+            }
+        }
+
+        // P15: colour resources live in exactly one file per project, plus the
+        // documented launch-window exception in each app's values.
+        // P15: colour resources live only in the design system, plus the documented
+        // launch-window exception: each app may mirror the background colour for the
+        // platform window in its own values/colors.xml, exactly one pair per app.
+        def colourXmlAllowlist = ~/projects\/[a-z0-9-]+\/(app\/)?src\/main\/res\/values(-night)?\/colors\.xml/
+        allProjects.each { project ->
+            ['src', 'app/src'].each { rel ->
+                def srcRoot = new File(project, rel)
+                if (!srcRoot.exists()) return
+                srcRoot.eachFileRecurse { f ->
+                    if (!f.isFile() || !f.name.endsWith('.xml')) return
+                    def relPath = wsRoot.toPath().relativize(f.toPath()).toString()
+                            .replace(File.separator, '/')
+                    if (!(relPath =~ /\/res\/values/)) return
+                    if (!(f.text =~ /<color\s+name=/)) return
+                    if (relPath ==~ colourXmlAllowlist) return
+                    note('P15-colour-resource',
+                            "$relPath defines colour resources — colours live only in " +
+                                    'design-system/src/main/res/values/colors.xml; the launch_background ' +
+                                    'pair in an app is the one allowlisted exception',
+                            'Requirement 15 · rules.md P15')
+                }
+            }
+        }
+
+        // R4: nothing from the dependency denylist, in any project's build scripts.
+        def denylist = new File(canon, 'dependency-denylist.md')
+        if (!denylist.exists()) {
+            note('R4-denylist', 'design-canon/dependency-denylist.md is missing',
+                    'Requirement 4 criterion 11')
+        } else {
+            def barred = denylist.text.split(/## Permitted/)[0]
+            def entries = (barred =~ /\|\s*`([a-z0-9.:_-]+)`\s*\|/).collect { it[1] }
+            allProjects.each { project ->
+                [project, new File(project, 'app')].each { dir ->
+                    ['build.gradle', 'settings.gradle'].each { scriptName ->
+                        def s = new File(dir, scriptName)
+                        if (!s.exists()) return
+                        s.readLines().eachWithIndex { line, i ->
+                            def code = line.replaceAll(/\/\/.*$/, '')
+                            entries.each { entry ->
+                                if (code.contains(entry)) {
+                                    note('R4-denylist',
+                                            "${wsRoot.toPath().relativize(s.toPath())}:${i + 1} " +
+                                                    "declares barred coordinate $entry",
+                                            'Requirement 4 criterion 3')
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // R5: the canon component list and the design system's components/ must agree.
+        def specs = new File(canon, 'component-specs.md')
+        if (specs.exists()) {
+            def declared = (specs.text =~ /(?m)^### `(\w+)`/).collect { it[1] } as Set
+            def present = (dsComponents.exists()
+                    ? dsComponents.listFiles().findAll { it.name.endsWith('.kt') }
+                    : []).collectMany { f ->
+                (f.text =~ /(?m)^(?:@Composable\s*\n)?fun (\w+)\(/).collect { it[1] }
+            } as Set
+            (declared - present).each { c ->
+                note('R5-component-agreement', "specced but not implemented: $c",
+                        'Requirement 5 criterion 2')
+            }
+        }
+
+        // X5: every canon and ideas document carries a status marker.
+        ['design-canon', 'ideas'].each { dir ->
+            def d = workspaceFile(dir)
+            if (!d.isDirectory()) return
+            d.listFiles()?.each { doc ->
+                if (!doc.name.endsWith('.md')) return
+                if (!(doc.text =~ /(?m)^status:\s*\S+/)) {
+                    note('X5-status-markers', "$dir/${doc.name} declares no status marker",
+                            'Requirement 5, rules.md X5')
+                }
+            }
+        }
+
+        // M5 + M3: the registries and the roadmap must agree; one game in progress.
+        // Under the composite layout a game's own project holds its registry, so the
+        // admission chain is per project: project exists → registry registers the
+        // game → the roadmap lists it.
+        def roadmap = workspaceFile('ideas/games-roadmap.md')
+        def registries = []
+        appProjects.each { p ->
+            appSourcesOf(p).each { root ->
+                ktFiles(root).findAll { it.name == 'GameRegistry.kt' }.each { registries << it }
+            }
+        }
+        if (roadmap.exists()) {
+            if (registries.isEmpty()) {
+                note('M5-roadmap-agreement',
+                        'no GameRegistry.kt found in any game project',
+                        'Requirement 5, rules.md M5')
+            }
+            def roadmapText = roadmap.text.toLowerCase()
+            registries.each { registry ->
+                def owner = registry.path.replace(File.separator, '/')
+                        .split('/projects/')[1].split('/')[0]
+                (registry.text =~ /(\w+)Definition\s*\(\s*\)/).each { m ->
+                    def id = m[1].toLowerCase()
+                    if (!roadmapText.contains(id)) {
+                        note('M5-roadmap-agreement',
+                                "projects/$owner registers '$id', which games-roadmap.md does not list",
+                                'Requirement 5, rules.md M5')
+                    }
+                }
+                // M5-identity, composite edition: the project's build script must give
+                // the shipped app its own application id — the gate that stops one game
+                // installing over another.
+                def gradle = new File(new File(projectsDir, owner), 'app/build.gradle')
+                if (!gradle.exists() || !(gradle.text =~ /applicationId\s+"com\.noadsstudio\./)) {
+                    note('M5-standalone-identity',
+                            "projects/$owner ships a game but its app/build.gradle does not pin an " +
+                                    "applicationId under com.noadsstudio.*",
+                            'Requirement 5, rules.md M5')
+                }
+            }
+            def inProgress = (roadmap.text =~ /status\s*`in_progress`/).count
+            if (inProgress > 1) {
+                note('M3-one-in-progress',
+                        "games-roadmap.md marks $inProgress games in_progress; the limit is one",
+                        'Requirement 7, rules.md M3')
+            }
+        }
+
+        // R16: persistence must survive a damaged file — every DataStore creator.
+        consumerSources.collectMany { ktFiles(it) }.each { f ->
+            if (f.text =~ /preferencesDataStore\s*\(/ && !(f.text.contains('corruptionHandler'))) {
+                def relPath = wsRoot.toPath().relativize(f.toPath()).toString()
+                note('R16-datastore-corruption',
+                        "$relPath creates a DataStore with no corruptionHandler",
+                        'Requirement 16 criterion 9')
+            }
+        }
+
+        // R17: values restated in AGENTS.md and the value-stating canon docs must
+        // match tokens.json.
+        def tokensFile = new File(canon, 'tokens.json')
+        def agents = workspaceFile('AGENTS.md')
+        def knownHex = tokensFile.exists()
+                ? (tokensFile.text =~ /"(#[0-9A-Fa-f]{6})"/).collect { it[1].toUpperCase() } as Set
+                : null
+
+        if (knownHex != null && agents.exists()) {
+            (agents.text =~ /`(#[0-9A-Fa-f]{6})`/).each { m ->
+                def hex = m[1].toUpperCase()
+                if (!(hex in knownHex)) {
+                    note('R17-agents-token-drift',
+                            "AGENTS.md states $hex, which tokens.json does not define",
+                            'Requirement 17 criterion 9')
+                }
+            }
+        }
+        ['nothing-tokens.md', 'nothing-design-system.md'].each { name ->
+            def doc = new File(canon, name)
+            if (knownHex == null || !doc.exists()) return
+            doc.readLines().eachWithIndex { line, i ->
+                (line =~ /(#[0-9A-Fa-f]{6})/).each { m ->
+                    def hex = m[1].toUpperCase()
+                    if (!(hex in knownHex)) {
+                        note('R17-canon-token-drift',
+                                "design-canon/$name:${i + 1} states $hex, " +
+                                        'which tokens.json does not define',
+                                'Requirement 17 criteria 8 and 9')
+                    }
+                }
+            }
+        }
+
+        def violations = []
+        def suppressed = 0
+
+        rules.each { rule ->
+            rule.roots.each { root ->
+                ktFiles(root).each { f ->
+                    f.readLines().eachWithIndex { line, i ->
+                        def code = line.replaceAll(/\/\/.*$/, '').replaceAll(/^\s*\*.*$/, '')
+                        if (!(code =~ rule.pattern)) return
+                        if (rule.exempt(f, code)) return
+                        if (code.contains(SUPPRESSION) || f.text.contains(SUPPRESSION + '(')) {
+                            suppressed++
+                            return
+                        }
+                        violations << [
+                                rule: rule,
+                                file: wsRoot.toPath().relativize(f.toPath()).toString(),
+                                line: i + 1,
+                                text: line.trim(),
+                        ]
+                    }
+                }
+            }
+        }
+
+        if (suppressed > SUPPRESSION_CAP) {
+            note('X11-suppression-cap',
+                    "$suppressed suppressed occurrence(s) exceeds the cap of $SUPPRESSION_CAP",
+                    'Requirement 15 criterion 15')
+        }
+
+        println ''
+        println '─'.multiply(72)
+        println "CONFORMANCE CHECK — ${appProjects.size()} game projects + shell + design-system"
+        println '─'.multiply(72)
+
+        def byRule = violations.groupBy { it.rule.id }
+        rules.each { rule ->
+            def hits = byRule[rule.id] ?: []
+            def status = hits.isEmpty() ? 'PASS' : "FAIL (${hits.size()})"
+            printf('  %-26s %s%n', rule.id, status)
+            hits.each { v ->
+                printf('      %s:%d%n', v.file, v.line)
+                printf('        %s%n', v.text)
+                printf('        %s — %s%n', rule.description, rule.authority)
+                if (rule.fix) printf('        FIX: %s%n', rule.fix)
+            }
+        }
+
+        def structuralIds = [
+                'R1-harness-dirs'        : 'Four harness directories exist',
+                'R1-root-markdown'       : 'Root markdown limited to README, AGENTS, CLAUDE',
+                'R17-adapter-links'      : 'Agent adapters are symlinks, never copies',
+                'R4-zero-permissions'    : 'No Android permission declared in source',
+                'R4-merged-permissions'  : 'No permission in the merged manifest either',
+                'R4-no-package-attr'     : 'No deprecated manifest package attribute',
+                'R4-no-binary-assets'    : 'No raster image or audio payload',
+                'R4-denylist'            : 'No barred dependency coordinate',
+                'R4-allow-backup'        : 'Every manifest pins android:allowBackup="false"',
+                'P15-colour-resource'    : 'Colour resources live only in the design system',
+                'R5-component-agreement' : 'Canon component list matches components/',
+                'R17-agents-token-drift' : 'AGENTS.md restates only real token values',
+                'R17-canon-token-drift'  : 'Value-stating canon docs name only real tokens',
+                'X5-status-markers'      : 'Every canon and ideas document states its status',
+                'M5-roadmap-agreement'   : 'Every registered game appears in the roadmap',
+                'M5-standalone-identity' : 'Every shipped game pins its own application id',
+                'M3-one-in-progress'     : 'At most one game in_progress at a time',
+                'R16-datastore-corruption': 'DataStore is created with a corruption handler',
+                'X11-suppression-cap'    : 'Suppressions stay within the cap of ten',
+        ]
+        def structuralFix = [
+                'R1-harness-dirs'        : 'Recreate the missing top-level directory (ideas, ' +
+                        'design-canon, projects, or specs).',
+                'R1-root-markdown'       : 'Move the file out of the repo root. Only README.md, ' +
+                        'AGENTS.md, and CLAUDE.md may live there; docs go under design-canon/ or ideas/.',
+                'R17-adapter-links'      : 'Make it a symlink to AGENTS.md, not a copy: ' +
+                        'from the repo root, ln -sf AGENTS.md CLAUDE.md (and likewise for the copilot file).',
+                'R4-zero-permissions'    : 'Delete the <uses-permission> line. The app declares zero ' +
+                        'permissions — see ideas/avoid.md.',
+                'R4-merged-permissions'  : 'A dependency merged a permission in. Remove that dependency. ' +
+                        'If the message says "no merged manifest", run that project\'s assembleDebug first.',
+                'R4-no-package-attr'     : 'Remove package="..." from the manifest; the id comes from ' +
+                        'the namespace in build.gradle.',
+                'R4-no-binary-assets'    : 'Delete the image/audio file. Draw it with Compose shapes or ' +
+                        'Canvas, or use the dot-matrix GameIcon.',
+                'R4-denylist'            : 'Remove the barred dependency. See ' +
+                        'design-canon/dependency-denylist.md for what is permitted.',
+                'R4-allow-backup'        : 'Add android:allowBackup="false" to the <application> ' +
+                        "element in that manifest. Absent means true, and device transfer can lift " +
+                        'the app\'s private DataStore off the device.',
+                'P15-colour-resource'    : 'Move the colour into ' +
+                        'design-system/src/main/res/values/colors.xml, mirroring a tokens.json value.',
+                'R5-component-agreement' : 'Either implement it as `fun <Name>(` in ' +
+                        'design-system/.../components, or delete its `### `<Name>`` heading from ' +
+                        'component-specs.md. The spec and the code must match.',
+                'R17-agents-token-drift' : 'The hex value is not in tokens.json. State a token name ' +
+                        'instead, or add the token to tokens.json first.',
+                'R17-canon-token-drift'  : 'The hex value is not in tokens.json. Remove it or add the ' +
+                        'token. These docs may only name values that exist.',
+                'X5-status-markers'      : 'Add a YAML front-matter block at the very top of the ' +
+                        'file: a line with three dashes, then `status: canonical` (or draft / ' +
+                        'superseded), then another three-dash line. Copy the top of any other canon doc.',
+                'M5-roadmap-agreement'   : 'Add the game to ideas/games-roadmap.md section 4, or remove ' +
+                        'its Definition() from GameRegistry. A game must pass admission before it ships.',
+                'M5-standalone-identity' : "Pin the game's applicationId in its app/build.gradle " +
+                        '(e.g. "com.noadsstudio.<game>"). Each shipped app needs its own id or it ' +
+                        'installs over another — see decision D27.',
+                'M3-one-in-progress'     : 'Set all but one game to a status other than in_progress in ' +
+                        'games-roadmap.md. Ship one, then start the next.',
+                'R16-datastore-corruption': 'Add corruptionHandler = ReplaceFileCorruptionHandler ' +
+                        '{ emptyPreferences() } to the preferencesDataStore delegate. A damaged file must ' +
+                        'not crash launch.',
+                'X11-suppression-cap'    : 'Remove @DesignSuppression annotations until at most ten ' +
+                        'remain. Fix the underlying violation rather than suppressing it.',
+        ]
+
+        def byStructural = structural.groupBy { it.id }
+        structuralIds.each { id, description ->
+            def hits = byStructural[id] ?: []
+            printf('  %-26s %s%n', id, hits.isEmpty() ? 'PASS' : "FAIL (${hits.size()})")
+            hits.each { h ->
+                printf('      %s%n', h.detail)
+                printf('        %s — %s%n', description, h.authority)
+                if (structuralFix[id]) printf('        FIX: %s%n', structuralFix[id])
+            }
+        }
+
+        println '─'.multiply(72)
+        if (suppressed > 0) {
+            println "  ${suppressed} suppressed occurrence(s) — cap is ${SUPPRESSION_CAP}, " +
+                    'Requirement 15 criterion 15'
+        }
+
+        def total = violations.size() + structural.size()
+        def ruleCount = rules.size() + structuralIds.size()
+
+        if (total == 0) {
+            println "  ${ruleCount} rules, 0 violations"
+            println '─'.multiply(72)
+        } else {
+            println "  ${total} violation(s) across ${byRule.size() + byStructural.size()} rule(s)"
+            println '─'.multiply(72)
+            throw new GradleException(
+                    "Conformance check failed with ${total} violation(s). " +
+                            'See design-canon/rules.md for the full rule index.')
+        }
+    }
+}

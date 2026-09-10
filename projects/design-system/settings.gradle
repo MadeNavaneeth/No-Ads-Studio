@@ -22,3 +22,5 @@ dependencyResolutionManagement {
 // consume it as the module `com.example.lightapp:design-system` — one source tree,
 // no published artifact, no copied tokens.
 rootProject.name = "design-system"
+// D37: the repo-root conformance gate, bound to check in build.gradle.
+includeBuild('../../conformance')
