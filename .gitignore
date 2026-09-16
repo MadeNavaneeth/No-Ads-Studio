@@ -33,3 +33,6 @@ keystore.properties
 
 # Client-local state
 .freebuff/
+
+# Scratch-run binaries (scripts/run-file.sh)
+.run/

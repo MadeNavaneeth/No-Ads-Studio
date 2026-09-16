@@ -1,0 +1,13 @@
+// Cmd+Shift+R runs the active file through scripts/run-file.sh
+// (Ctrl+Shift+R on Windows/Linux). The default debug binding is F5.
+{
+  "version": "2.0.0",
+  "keybindings": [
+    {
+      "key": "cmd+shift+r",
+      "mac": "cmd+shift+r",
+      "command": "workbench.action.tasks.runTask",
+      "args": "Run Active File (C / C++ / Python)"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  // "Run Active File" executes whatever file is open and focused — Python directly,
+  // C/C++ compiled to .run/<name> first (tasks come from scripts/run-file.sh).
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run Active File (C / C++ / Python)",
+      "type": "process",
+      "command": "${workspaceFolder}/scripts/run-file.sh",
+      "args": ["${file}"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    }
+  ]
+}
