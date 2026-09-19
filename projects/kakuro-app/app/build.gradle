@@ -1,7 +1,7 @@
-// D35: standalone wordsearch(12) app — app module.
+// D37/D40: standalone kakuro(10) app — app module.
 //
 // Depends on the shared shell (chrome) and design-system (design language) via
-// composite builds. This module provides only the nonogram game code, its session
+// composite builds. This module provides only the kakuro game code, its session
 // persistence, and the app entry point.
 plugins {
     alias(libs.plugins.android.application)
@@ -14,7 +14,7 @@ android {
     compileSdk 35
 
     defaultConfig {
-        applicationId "com.noadsstudio.wordsearch"
+        applicationId "com.noadsstudio.kakuro"
         minSdk 26
         targetSdk 35
         versionCode 1

@@ -1,4 +1,4 @@
-// D35: standalone nonogram(10) app — root build.
+// D37/D40: standalone kakuro(10) app — root build.
 plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.kotlin.android) apply false

@@ -1,4 +1,4 @@
-// D35: standalone sudoku(9) app — a self-contained Android project.
+// D37/D40: standalone kakuro(10) app — a self-contained Android project.
 //
 // Includes the shared design-system and shell as composite builds so this project
 // compiles the same source as every other game. The shell provides the chrome
@@ -20,7 +20,7 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "sudoku-app"
+rootProject.name = "kakuro-app"
 include ':app'
 
 // Composite builds: the design system and the shared shell.

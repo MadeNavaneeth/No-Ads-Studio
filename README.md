@@ -11,6 +11,7 @@ network, no ongoing cost.
 | `ideas/` | Ideation, research, constraints, decisions (D1–D37), and the games roadmap — thinking, not values. |
 | `design-canon/` | Authoritative design language: tokens, craft rules, component specs, provenance. |
 | `projects/` | One Gradle build per project: eight game apps + two shared libraries (see below). |
+| `gradle/libs.versions.toml` | The one version catalog (D42) — every plugin and library version for all twelve builds lives here. |
 | `conformance/` | The repo-root conformance gate (D37) — 33 rules wired into every project's `check`. |
 | `scripts/` | Emulator tooling (boot, run a game, screenshot) — decision D28. |
 | `specs/` | Feature specs in plain Markdown, readable by any agent or human. |

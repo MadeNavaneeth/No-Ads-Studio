@@ -416,6 +416,23 @@ tasks.register('conformanceCheck') {
                     }
                 }
             }
+            // D42: coordinates now live in the shared version catalog — the denylist
+            // must scan gradle/libs.versions.toml too, or a barred dependency could
+            // hide in the one file every build imports.
+            def catalog = workspaceFile('gradle/libs.versions.toml')
+            if (catalog.exists()) {
+                catalog.readLines().eachWithIndex { line, i ->
+                    def code = line.replaceAll(/#.*/, '')
+                    entries.each { entry ->
+                        if (code.contains(entry)) {
+                            note('R4-denylist',
+                                    "gradle/libs.versions.toml:${i + 1} " +
+                                            "declares barred coordinate $entry",
+                                    'Requirement 4 criterion 3')
+                        }
+                    }
+                }
+            }
         }
 
         // R5: the canon component list and the design system's components/ must agree.

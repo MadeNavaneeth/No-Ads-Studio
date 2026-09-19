@@ -1,0 +1,64 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# THE STUDIO VERSION CATALOG — decision D42
+#
+# This file is the only place in the studio where a third-party version is
+# authored. Every build under projects/ imports it in its settings.gradle via
+#
+#     dependencyResolutionManagement {
+#         versionCatalogs {
+#             libs { from(files(new File(settingsDir, '../../gradle/libs.versions.toml'))) }
+#         }
+#     }
+#
+# and consumes it as `libs.plugins.*` / `libs.*` aliases. Game #40 inherits
+# the same versions as game #1 by construction — drift is impossible, and a
+# toolchain upgrade is a one-line edit here.
+# ═══════════════════════════════════════════════════════════════════════════
+
+[versions]
+# The toolchain. AGP is held at 8.5.2 until its bundled Lint runs on JDK 25
+# (decisions D22/D24); Kotlin 2.2.21 pairs with the compose compiler plugin.
+agp = "8.5.2"
+kotlin = "2.2.21"
+
+# The dependency set.
+composeBom = "2024.06.00"
+activityCompose = "1.9.0"
+datastore = "1.1.1"
+lifecycle = "2.8.4"
+junit = "4.13.2"
+
+# D39 — the screen gate. Robolectric's bundled ASM predates the Java 25 class
+# format this toolchain emits (major 69); current ASM is forced alongside it.
+# Drop the asm pins when Robolectric ships a JDK-25-capable release.
+robolectric = "4.14.1"
+roborazzi = "1.26.0"
+asm = "9.9"
+
+[libraries]
+compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+compose-ui = { group = "androidx.compose.ui", name = "ui" }
+compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+compose-foundation = { group = "androidx.compose.foundation", name = "foundation" }
+compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+
+activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
+lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycle" }
+
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
+asm = { group = "org.ow2.asm", name = "asm", version.ref = "asm" }
+asm-commons = { group = "org.ow2.asm", name = "asm-commons", version.ref = "asm" }
+asm-tree = { group = "org.ow2.asm", name = "asm-tree", version.ref = "asm" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }

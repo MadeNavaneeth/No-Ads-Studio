@@ -1,13 +1,13 @@
 import groovy.json.JsonSlurper
 
 plugins {
-    id 'com.android.library'
-    id 'org.jetbrains.kotlin.android'
-    id 'org.jetbrains.kotlin.plugin.compose'
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
     // D39 — the screen gate. Provides record/verify modes for the golden tests:
     //   ./gradlew recordRoborazziDebug   (re-capture on a deliberate change)
     //   ./gradlew verifyRoborazziDebug   (the build-failing comparison)
-    id 'io.github.takahirom.roborazzi' version '1.26.0'
+    alias(libs.plugins.roborazzi)
 }
 
 // D35: this build is included by every game project as a composite build
@@ -295,30 +295,30 @@ dependencies {
     // Note: this does NOT remove Color/Dp from consumers' classpaths, because
     // androidx.compose.ui:ui re-exports ui-graphics and ui-unit as `api`.
     // The forbidden-type gate is the detekt rule bound to `check`. See rationale.md §9.
-    implementation platform('androidx.compose:compose-bom:2024.06.00')
-    implementation 'androidx.compose.ui:ui'
-    implementation 'androidx.compose.ui:ui-graphics'
-    implementation 'androidx.compose.material3:material3'
+    implementation platform(libs.compose.bom)
+    implementation libs.compose.ui
+    implementation libs.compose.ui.graphics
+    implementation libs.compose.material3
 
-    testImplementation 'junit:junit:4.13.2'
+    testImplementation libs.junit
 
     // D39 — the screen gate (build-order step 10). Roborazzi over Robolectric,
     // D34 Tier 1: JVM screenshot tests, no emulator, test-time only — nothing
     // here can reach a release artifact. Golden captures land in
     // src/test/snapshots/ (outside res/ and assets/, so R4 stays silent) and
     // are committed: a spacing token swapped for another must fail a build.
-    testImplementation 'org.robolectric:robolectric:4.14.1'
-    testImplementation 'io.github.takahirom.roborazzi:roborazzi:1.26.0'
+    testImplementation libs.robolectric
+    testImplementation libs.roborazzi
     // Robolectric's sandbox re-instruments classes with its bundled ASM, which
     // predates the Java 25 class-file format this toolchain produces (major 69)
     // — the same JDK 25 family of gaps as D22/D24. Forcing current ASM lets the
     // sandbox read what it is handed. Drop when Robolectric ships this itself.
-    testImplementation 'org.ow2.asm:asm:9.9'
-    testImplementation 'org.ow2.asm:asm-commons:9.9'
-    testImplementation 'org.ow2.asm:asm-tree:9.9'
-    testImplementation platform('androidx.compose:compose-bom:2024.06.00')
-    testImplementation 'androidx.compose.ui:ui-test-junit4'
-    testImplementation 'androidx.compose.ui:ui-test-manifest'
+    testImplementation libs.asm
+    testImplementation libs.asm.commons
+    testImplementation libs.asm.tree
+    testImplementation platform(libs.compose.bom)
+    testImplementation libs.compose.ui.test.junit4
+    testImplementation libs.compose.ui.test.manifest
 }
 
 // The conformance checker is a build gate, not an optional step — decision D23.

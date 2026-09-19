@@ -879,3 +879,31 @@ Strictly sequential. Each step leaves the project compiling.
 8. Debug composition guards, detekt forbidden-type rule, Konsist architecture test — all bound to `check`
 9. `conformanceCheck` Gradle task: harness structure, denylist, anti-requirements, doc/code agreement
 10. Paparazzi component spec sheet + goldens, then the four review tests in `nothing-study.md` §12
+
+## D42 — One version catalog for the whole studio
+
+status: accepted
+
+**Decision.** Every plugin and library version is authored in exactly one file — `gradle/libs.versions.toml`
+at the repo root. Each of the twelve builds imports it in its `settings.gradle` via
+`dependencyResolutionManagement { versionCatalogs { libs { from(files(new File(settingsDir, '../../gradle/libs.versions.toml'))) } } }`
+and consumes it through `libs.plugins.*` / `libs.*` aliases. Literal version numbers in build
+scripts are retired.
+
+**Why.** Under the composite layout (D37) every project is its own Gradle build, so AGP, Kotlin, and the
+Compose BOM were copy-pasted eleven times. Game #40 drifting from game #1's toolchain was a matter of
+time, and an AGP upgrade — the precondition for un-disabling Lint (D24) — would have been a twelve-file
+hunt. Now an upgrade is a one-line edit and drift is impossible by construction, not by vigilance.
+
+**Consequences.**
+- `pluginManagement.plugins` is gone from every settings file; the `alias(...) apply false` lines in each
+  root build script pin plugin versions — which is why the catalog must be declared in
+  `dependencyResolutionManagement`, not `pluginManagement` (a `from(files(...))` catalog is not visible
+  inside `pluginManagement.plugins`).
+- The conformance gate's denylist rule (R4) now scans `gradle/libs.versions.toml` too — coordinates
+  moved out of build scripts and the gate moved with them.
+- A new game scaffolds its `settings.gradle`/`build.gradle` from an existing project and inherits every
+  version for free.
+
+**Verification.** All 12 builds configure; design-system, shell, and binairo-app run full `check` green
+(3m03s / 1m18s / 38s); the gate passes with the TOML scan active.

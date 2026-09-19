@@ -328,6 +328,12 @@ plus the shell's shared persistence tests, and `shell` + `design-system` carry t
 properties, font coverage). Add tests with logic; a
 pure-function file with no test is the cheapest thing in this repo to get wrong.
 
+**Versions live in exactly one place** — `gradle/libs.versions.toml` at the repo root (decision D42).
+Each build imports it in its `settings.gradle` and consumes `libs.plugins.*` / `libs.*` aliases; no
+literal version numbers in build scripts. An AGP/Kotlin/BOM upgrade is a one-line edit in the catalog,
+and a new project inherits every version automatically. The gate's denylist rule scans the catalog too.
+Do not add a dependency by literal coordinate: add an alias to the catalog first.
+
 ---
 
 ## Building the app
