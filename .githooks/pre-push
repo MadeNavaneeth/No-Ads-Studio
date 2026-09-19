@@ -1,0 +1,66 @@
+#!/bin/sh
+# Versioned at .githooks/pre-push. Activate once per clone with:
+#   git config core.hooksPath .githooks
+#
+# Runs the studio's local CI before anything reaches GitHub: always the
+# conformance gate, plus `check` for every project the push touches. A push
+# that touches design-system/, shell/ or conformance/ checks every project,
+# since all games consume those. STUDIO_CHECK_FULL=1 forces a full run.
+# One-off bypass (at your own risk): git push --no-verify.
+root="$(git rev-parse --show-toplevel)" || exit 1
+
+local_sha=""
+remote_sha=""
+while read -r _ lref lsha _rref rsha; do
+  local_sha="$lsha"; remote_sha="$rsha"
+done
+
+# Deleting a remote branch pushes no code — nothing to verify.
+if [ -z "$local_sha" ] || [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+  echo "pre-push: branch deletion — nothing to verify"
+  exit 0
+fi
+
+if [ -z "$remote_sha" ] || [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+  base="origin/main"          # new branch: everything not yet on main
+else
+  base="$remote_sha"          # normal push: verify exactly the delta
+fi
+
+if ! git rev-parse -q --verify "$base" >/dev/null 2>&1; then
+  echo "pre-push: cannot resolve $base — running the full check"
+  exec "$root/scripts/studio-check.sh" --fail-fast
+fi
+
+changed="$(git diff --name-only "$base..$local_sha")"
+
+# Map changed files to the set of affected projects.
+only=""
+all_needed=0
+for f in $changed; do
+  case "$f" in
+    projects/*)
+      p="${f#projects/}"; p="${p%%/*}"
+      case ",$only," in
+        *",$p,"*) ;;                        # already collected
+        *) only="${only:+$only,}$p" ;;
+      esac
+      ;;
+    design-system/*|shell/*|conformance/*)
+      all_needed=1                          # shared builds feed every game
+      break
+      ;;
+    *)
+      :                                     # docs, scripts, canon: the gate covers these
+      ;;
+  esac
+done
+
+if [ "$all_needed" -eq 1 ] || [ "${STUDIO_CHECK_FULL:-0}" = "1" ]; then
+  exec "$root/scripts/studio-check.sh" --fail-fast
+fi
+
+if [ -z "$only" ]; then
+  exec "$root/scripts/studio-check.sh" --quick
+fi
+exec "$root/scripts/studio-check.sh" --fail-fast "--only=$only"

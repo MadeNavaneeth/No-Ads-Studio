@@ -36,3 +36,6 @@ keystore.properties
 
 # Scratch-run binaries (scripts/run-file.sh)
 .run/
+
+# Local CI logs (scripts/studio-check.sh)
+.studio-check-logs/

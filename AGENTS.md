@@ -181,6 +181,7 @@ Everything below is working code. `sudoku(9)` has been played on a device.
 | `ideas/` | implemented | populated, status markers enforced by `X5-status-markers` |
 | `design-canon/` | implemented | `tokens.json` is the machine-readable source; canon drift is a build gate |
 | `projects/` | implemented | composite layout (D36/D37): eight game apps + shared shell + design-system |
+| `projects/sudoku-app/` | device-verified | standalone `sudoku(9)` app — renders, plays, and persists on emulator-5554 (2026-09-18); the only game app device-verified so far |
 | `specs/` | implemented | harness spec lives here |
 | `:design-system` | implemented | token generator, theme, value-class boundary, 19 tests |
 | `:design-system/theme` | implemented | colours, type, spacing, shape, motion, gated haptics. `Fonts.kt` is the one placeholder. |
@@ -199,7 +200,7 @@ Everything below is working code. `sudoku(9)` has been played on a device.
 | `app/studio/persistence` stats | implemented | per game and difficulty: played, won, best time. Consumes `GameResult` (D26). |
 
 **Build order position: step 9 complete, plus the composite split (D36/D37).** Eight games are
-implemented pre-launch; none has been device-playtested in its standalone app yet. The enforcement layer is
+implemented pre-launch; only `sudoku(9)` has been device-verified in its standalone app so far. The enforcement layer is
 the repo-root gate, wired into every project's `check`. Remaining: Paparazzi goldens (step 10),
 on-device playtesting per app, and an AGP upgrade to get Android Lint back.
 
@@ -307,8 +308,10 @@ Run from any `projects/<name>/` — each project is its own Gradle build (D36):
 
 **One game, one project.** Each app under `projects/<game>-app` ships its own `applicationId`
 (`com.noadsstudio.<game>`) and store listing. Output lands in
-`projects/<game>-app/app/build/outputs/apk/debug/`. Changed a shared library? Check every consumer:
-`for p in projects/*-app; do (cd "$p" && ./gradlew check); done`.
+`projects/<game>-app/app/build/outputs/apk/debug/`. Local CI: `scripts/studio-check.sh` runs the
+gate plus every project's `check` in one command (`--quick`, `--fail-fast`, `--only=<projects>`);
+the `.githooks/pre-push` hook runs it on every push so nothing reaches GitHub unverified
+(`git config core.hooksPath .githooks` to activate per clone).
 
 **Order matters, and only in one place.** `R4-merged-permissions` reads the *merged* manifest to prove the
 installed APK grants nothing — the realistic way the offline promise breaks is a dependency merging a
@@ -318,7 +321,9 @@ refusing to vouch for something it cannot see, which is correct. Put `assembleDe
 
 `./gradlew lint` is disabled on this toolchain — AGP 8.5.2's Lint cannot run on JDK 25 (decision D24). It is
 not a passing check, it is an absent one. Losing it costs the accessibility and API-level checks, so those
-are review obligations until AGP is upgraded.Every project runs its own suite: each game app carries its game's rules/generator/hint/codec tests
+are review obligations until AGP is upgraded.
+
+Every project runs its own suite: each game app carries its game's rules/generator/hint/codec tests
 plus the shell's shared persistence tests, and `shell` + `design-system` carry their own (token
 properties, font coverage). Add tests with logic; a
 pure-function file with no test is the cheapest thing in this repo to get wrong.

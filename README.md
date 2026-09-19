@@ -46,11 +46,20 @@ cd projects/sudoku-app        # or any projects/<name>
 ./gradlew :app:assembleDebug  # its debug APK
 ```
 
-Changed a shared library? Check every consumer:
+Changed a shared library? Check every consumer: `scripts/studio-check.sh` — local CI in one
+command: the conformance gate plus every project's `check`, with `--quick` (gate only),
+`--fail-fast`, and `--only=<projects>`. Per-project logs land in `.studio-check-logs/`.
 
 ```bash
-for p in projects/*-app; do (cd "$p" && ./gradlew check); done
+scripts/studio-check.sh              # gate + every project's check
+scripts/studio-check.sh --quick      # gate only, seconds
+scripts/studio-check.sh --only=sudoku-app,binairo-app
 ```
+
+**Nothing lands on GitHub unverified:** the versioned pre-push hook (`.githooks/pre-push`, activate
+per clone with `git config core.hooksPath .githooks`) runs the gate plus a `check` of exactly the
+projects a push touches — all of them when a shared library changes. `STUDIO_CHECK_FULL=1` forces a
+full run; `git push --no-verify` bypasses once, at your own risk.
 
 On a device: `scripts/emu-start.sh`, then `scripts/run-on-emu.sh <game>` (build + install + launch
 + screenshot in one command).
